@@ -35,21 +35,7 @@ func Run(ctx context.Context, cfg Config) error {
 		}
 	}
 
-	tools := []provider.Tool{
-		{
-			Name:        "get_current_time",
-			Description: "Get the current date and time",
-			Parameters: map[string]any{
-				"properties": map[string]any{
-					"timezone": map[string]any{
-						"type":        "string",
-						"description": "IANA timezone, e.g. America/New_York",
-					},
-				},
-				"required": []any{"timezone"},
-			},
-		},
-	}
+	tools := []provider.Tool{}
 
 	systemPrompt := BuildSystemPrompt(cfg.BaseDir, soulContent)
 	chatCfg := &chat.Config{

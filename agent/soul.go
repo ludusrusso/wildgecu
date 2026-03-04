@@ -3,18 +3,23 @@ package agent
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
+
+	"gonesis/x/config"
 )
 
 // soulPath returns the path to .gonesis/SOUL.md relative to baseDir.
-func soulPath(baseDir string) string {
-	return filepath.Join(baseDir, ".gonesis", "SOUL.md")
+func soulPath(baseDir string) (string, error) {
+	return config.ProjectFilePath(baseDir, "SOUL.md")
 }
 
 // LoadSoul reads SOUL.md from baseDir. Returns (content, exists, err).
 func LoadSoul(baseDir string) (string, bool, error) {
-	data, err := os.ReadFile(soulPath(baseDir))
+	path, err := soulPath(baseDir)
+	if err != nil {
+		return "", false, err
+	}
+	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return "", false, nil
 	}
@@ -26,11 +31,14 @@ func LoadSoul(baseDir string) (string, bool, error) {
 
 // writeSoul creates .gonesis/ dir if needed and writes SOUL.md.
 func writeSoul(baseDir, content string) error {
-	dir := filepath.Join(baseDir, ".gonesis")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if _, err := config.ProjectDir(baseDir); err != nil {
 		return fmt.Errorf("creating .gonesis dir: %w", err)
 	}
-	if err := os.WriteFile(soulPath(baseDir), []byte(content), 0o644); err != nil {
+	path, err := config.ProjectFilePath(baseDir, "SOUL.md")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		return fmt.Errorf("writing SOUL.md: %w", err)
 	}
 	return nil
@@ -39,7 +47,11 @@ func writeSoul(baseDir, content string) error {
 // loadWorkspaceFile reads a file from .gonesis/ under baseDir.
 // Returns "" if the file does not exist.
 func loadWorkspaceFile(baseDir, filename string) (string, error) {
-	data, err := os.ReadFile(filepath.Join(baseDir, ".gonesis", filename))
+	path, err := config.ProjectFilePath(baseDir, filename)
+	if err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return "", nil
 	}
