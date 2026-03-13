@@ -86,7 +86,7 @@ func Run(ctx context.Context, cfg Config) error {
 }
 
 func loadTools(home homer.Homer) *tool.Registry {
-	tools := []tool.Tool{getCurrentTimeTool}
+	tools := []tool.Tool{getCurrentTimeTool, bashTool}
 	if home != nil {
 		tools = append(tools, newLoadSkillTool(home))
 	}
