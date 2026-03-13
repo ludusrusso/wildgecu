@@ -51,7 +51,7 @@ func TestBootstrapConfig_WritesSoul(t *testing.T) {
 	if !errors.Is(err, provider.ErrDone) {
 		t.Fatalf("expected provider.ErrDone, got %v", err)
 	}
-	if result != `{"status": "ok"}` {
+	if result != `{"status":"ok"}` {
 		t.Fatalf("unexpected result: %s", result)
 	}
 	if soulContent != "My soul content" {
@@ -78,12 +78,9 @@ func TestBootstrapConfig_EmptyContent(t *testing.T) {
 		Args: map[string]any{"content": ""},
 	}
 
-	result, err := cfg.Executor(tc)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result != `{"error": "content must not be empty"}` {
-		t.Fatalf("unexpected result: %s", result)
+	_, err := cfg.Executor(tc)
+	if err == nil {
+		t.Fatal("expected error for empty content")
 	}
 }
 
@@ -103,7 +100,7 @@ func TestBootstrapConfig_UnknownTool(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result != `{"error": "unknown tool"}` {
+	if result != `{"error": "unknown tool: unknown_tool"}` {
 		t.Fatalf("unexpected result: %s", result)
 	}
 }

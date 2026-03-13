@@ -20,9 +20,10 @@ type Message struct {
 
 // ToolCall represents a function call requested by the model.
 type ToolCall struct {
-	Args map[string]any
-	ID   string
-	Name string
+	Args             map[string]any
+	ID               string
+	Name             string
+	ThoughtSignature []byte // Opaque signature for thinking models (e.g. Gemini)
 }
 
 // Tool defines a function the model can call.

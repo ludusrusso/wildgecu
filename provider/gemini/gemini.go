@@ -66,9 +66,10 @@ func (p *Provider) GenerateStream(ctx context.Context, params *provider.Generate
 					}
 					if part.FunctionCall != nil {
 						chunk.ToolCalls = append(chunk.ToolCalls, provider.ToolCall{
-							ID:   part.FunctionCall.Name,
-							Name: part.FunctionCall.Name,
-							Args: part.FunctionCall.Args,
+							ID:               part.FunctionCall.Name,
+							Name:             part.FunctionCall.Name,
+							Args:             part.FunctionCall.Args,
+							ThoughtSignature: part.ThoughtSignature,
 						})
 					}
 				}
@@ -124,7 +125,11 @@ func toContent(msg provider.Message) *genai.Content {
 		if len(msg.ToolCalls) > 0 {
 			parts := make([]*genai.Part, 0, len(msg.ToolCalls))
 			for _, tc := range msg.ToolCalls {
-				parts = append(parts, genai.NewPartFromFunctionCall(tc.Name, tc.Args))
+				p := genai.NewPartFromFunctionCall(tc.Name, tc.Args)
+				if len(tc.ThoughtSignature) > 0 {
+					p.ThoughtSignature = tc.ThoughtSignature
+				}
+				parts = append(parts, p)
 			}
 			if msg.Content != "" {
 				parts = append([]*genai.Part{genai.NewPartFromText(msg.Content)}, parts...)
@@ -253,9 +258,10 @@ func toResponse(resp *genai.GenerateContentResponse) *provider.Response {
 		}
 		if part.FunctionCall != nil {
 			r.Message.ToolCalls = append(r.Message.ToolCalls, provider.ToolCall{
-				ID:   part.FunctionCall.Name, // Gemini uses name as ID
-				Name: part.FunctionCall.Name,
-				Args: part.FunctionCall.Args,
+				ID:               part.FunctionCall.Name, // Gemini uses name as ID
+				Name:             part.FunctionCall.Name,
+				Args:             part.FunctionCall.Args,
+				ThoughtSignature: part.ThoughtSignature,
 			})
 		}
 	}
