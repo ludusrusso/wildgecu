@@ -13,7 +13,7 @@ var ErrDone = errors.New("agent loop done")
 
 // ToolExecutor is called for each tool call the model makes.
 // It returns the tool result string. Return ErrDone to stop the loop early.
-type ToolExecutor func(tc ToolCall) (string, error)
+type ToolExecutor func(ctx context.Context, tc ToolCall) (string, error)
 
 // RunAgentLoopStream is like RunAgentLoop but streams the final text response.
 // Intermediate tool-call iterations use blocking Generate. Only the final
@@ -69,7 +69,7 @@ func RunAgentLoopStream(ctx context.Context, p Provider, systemPrompt string, me
 		messages = append(messages, resp.Message)
 		for _, tc := range resp.Message.ToolCalls {
 			dbg.ToolCall(tc.Name, tc.Args)
-			result, err := execute(tc)
+			result, err := execute(ctx, tc)
 			if err != nil {
 				if errors.Is(err, ErrDone) {
 					dbg.ToolResult(tc.Name, result)
@@ -114,7 +114,7 @@ func RunAgentLoop(ctx context.Context, p Provider, systemPrompt string, messages
 
 		for _, tc := range resp.Message.ToolCalls {
 			dbg.ToolCall(tc.Name, tc.Args)
-			result, err := execute(tc)
+			result, err := execute(ctx, tc)
 			if err != nil {
 				if errors.Is(err, ErrDone) {
 					dbg.ToolResult(tc.Name, result)

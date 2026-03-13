@@ -47,7 +47,7 @@ func TestBootstrapConfig_WritesSoul(t *testing.T) {
 		Args: map[string]any{"content": "My soul content"},
 	}
 
-	result, err := cfg.Executor(tc)
+	result, err := cfg.Executor(context.Background(), tc)
 	if !errors.Is(err, provider.ErrDone) {
 		t.Fatalf("expected provider.ErrDone, got %v", err)
 	}
@@ -78,7 +78,7 @@ func TestBootstrapConfig_EmptyContent(t *testing.T) {
 		Args: map[string]any{"content": ""},
 	}
 
-	_, err := cfg.Executor(tc)
+	_, err := cfg.Executor(context.Background(), tc)
 	if err == nil {
 		t.Fatal("expected error for empty content")
 	}
@@ -96,7 +96,7 @@ func TestBootstrapConfig_UnknownTool(t *testing.T) {
 		Args: map[string]any{},
 	}
 
-	result, err := cfg.Executor(tc)
+	result, err := cfg.Executor(context.Background(), tc)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

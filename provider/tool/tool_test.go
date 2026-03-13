@@ -210,7 +210,7 @@ func TestRegistry_ToolsAndExecutor(t *testing.T) {
 	}
 
 	executor := reg.Executor()
-	result, err := executor(provider.ToolCall{
+	result, err := executor(context.Background(), provider.ToolCall{
 		Name: "echo",
 		Args: map[string]any{"message": "world"},
 	})
@@ -231,7 +231,7 @@ func TestRegistry_UnknownTool(t *testing.T) {
 	reg := NewRegistry()
 	executor := reg.Executor()
 
-	result, err := executor(provider.ToolCall{Name: "nope", Args: map[string]any{}})
+	result, err := executor(context.Background(), provider.ToolCall{Name: "nope", Args: map[string]any{}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

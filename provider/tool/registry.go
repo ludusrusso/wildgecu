@@ -37,11 +37,11 @@ func (r *Registry) Tools() []provider.Tool {
 
 // Executor returns a provider.ToolExecutor that dispatches by tool name.
 func (r *Registry) Executor() provider.ToolExecutor {
-	return func(tc provider.ToolCall) (string, error) {
+	return func(ctx context.Context, tc provider.ToolCall) (string, error) {
 		t, ok := r.tools[tc.Name]
 		if !ok {
 			return fmt.Sprintf(`{"error": "unknown tool: %s"}`, tc.Name), nil
 		}
-		return t.Execute(context.Background(), tc.Args)
+		return t.Execute(ctx, tc.Args)
 	}
 }

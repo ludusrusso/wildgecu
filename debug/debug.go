@@ -15,7 +15,7 @@ type Logger struct {
 	file *os.File
 }
 
-// New creates a new debug logger. It creates a file at ~/debug/<timestamp>.md.
+// New creates a new debug logger. It creates a file at ~/.gonesis/debug/<timestamp>.md.
 func New() (*Logger, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -43,13 +43,16 @@ func New() (*Logger, error) {
 
 // Close closes the underlying file.
 func (l *Logger) Close() error {
-	if l == nil {
+	if l == nil || l.file == nil {
 		return nil
 	}
 	return l.file.Close()
 }
 
 func (l *Logger) write(format string, args ...any) {
+	if l == nil || l.file == nil {
+		return
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	fmt.Fprintf(l.file, format, args...)
@@ -57,64 +60,43 @@ func (l *Logger) write(format string, args ...any) {
 
 // SystemPrompt logs the system prompt.
 func (l *Logger) SystemPrompt(prompt string) {
-	if l == nil {
-		return
-	}
 	l.write("## System Prompt\n\n```\n%s\n```\n\n", prompt)
 }
 
 // UserMessage logs a user message.
 func (l *Logger) UserMessage(content string) {
-	if l == nil {
-		return
-	}
 	l.write("## User\n\n%s\n\n", content)
 }
 
 // ModelResponse logs a model response (text content).
 func (l *Logger) ModelResponse(content string) {
-	if l == nil {
-		return
-	}
 	l.write("## Model\n\n%s\n\n", content)
 }
 
 // ToolCall logs a tool call from the model.
 func (l *Logger) ToolCall(name string, args map[string]any) {
-	if l == nil {
-		return
-	}
 	argsJSON, _ := json.MarshalIndent(args, "", "  ")
 	l.write("### Tool Call: `%s`\n\n```json\n%s\n```\n\n", name, argsJSON)
 }
 
 // ToolResult logs a tool execution result.
 func (l *Logger) ToolResult(name string, result string) {
-	if l == nil {
-		return
-	}
 	l.write("### Tool Result: `%s`\n\n```\n%s\n```\n\n", name, result)
 }
 
 // GenerateRequest logs when a generate request is made to the provider.
 func (l *Logger) GenerateRequest(msgCount int, toolCount int) {
-	if l == nil {
-		return
-	}
 	l.write("---\n\n> Generate request: %d messages, %d tools\n\n", msgCount, toolCount)
 }
 
 // Usage logs token usage.
 func (l *Logger) Usage(input, output int) {
-	if l == nil {
-		return
-	}
 	l.write("> Usage: %d input tokens, %d output tokens\n\n", input, output)
 }
 
 // Error logs an error.
 func (l *Logger) Error(err error) {
-	if l == nil {
+	if err == nil {
 		return
 	}
 	l.write("### Error\n\n```\n%s\n```\n\n", err.Error())
