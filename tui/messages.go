@@ -31,3 +31,9 @@ type streamDoneMsg struct {
 	response *provider.Response
 	messages []provider.Message
 }
+
+// toolCallMsg is sent when the agent starts executing a tool.
+type toolCallMsg struct {
+	name string
+	args string
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -36,8 +37,9 @@ type Model struct {
 	err           error
 	cfg           *chat.Config
 	program       *programRef
-	streamContent string
-	messages      []provider.Message
+	streamContent  string
+	activeToolCall string
+	messages       []provider.Message
 	display       []string
 	textinput     textinput.Model
 	viewport      viewport.Model
@@ -132,6 +134,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cfg := m.cfg
 			ctx := m.ctx
 			prog := m.program
+			cfg.OnToolCall = func(tc provider.ToolCall) {
+				if prog.p != nil {
+					prog.p.Send(toolCallMsg{name: tc.Name, args: formatToolArgs(tc.Args, 100)})
+				}
+			}
 			return m, tea.Batch(m.spinner.Tick, func() tea.Msg {
 				onChunk := func(chunk string) {
 					if prog.p != nil {
@@ -172,6 +179,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cfg := m.cfg
 		ctx := m.ctx
 		prog := m.program
+		cfg.OnToolCall = func(tc provider.ToolCall) {
+			if prog.p != nil {
+				prog.p.Send(toolCallMsg{name: tc.Name, args: formatToolArgs(tc.Args, 100)})
+			}
+		}
 		return m, tea.Batch(m.spinner.Tick, func() tea.Msg {
 			onChunk := func(chunk string) {
 				if prog.p != nil {
@@ -197,7 +209,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case toolCallMsg:
+		m.activeToolCall = msg.name
+		label := msg.name
+		if msg.args != "" {
+			label += "(" + msg.args + ")"
+		}
+		m.appendDisplay(toolStyle.Render("⚡ " + label))
+		return m, nil
+
 	case streamChunkMsg:
+		m.activeToolCall = ""
 		m.streamContent += msg.content
 		m.display[m.streamIdx] = m.renderMarkdown(m.streamContent)
 		if m.ready {
@@ -209,6 +231,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case streamDoneMsg:
 		m.messages = msg.messages
 		m.loading = false
+		m.activeToolCall = ""
 		if msg.response != nil && msg.response.Message.Content != "" {
 			m.display[m.streamIdx] = m.renderMarkdown(msg.response.Message.Content)
 		}
@@ -222,6 +245,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case agentDoneMsg:
 		m.messages = msg.messages
 		m.loading = false
+		m.activeToolCall = ""
 		m.done = true
 		if m.cfg.OnDone != nil {
 			m.cfg.OnDone(msg.messages)
@@ -230,6 +254,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case agentErrorMsg:
 		m.loading = false
+		m.activeToolCall = ""
 		m.err = msg.err
 		m.appendDisplay(lipgloss.NewStyle().Width(m.width).Render(errorStyle.Render("Error: " + msg.err.Error())))
 		return m, nil
@@ -299,6 +324,8 @@ func (m Model) View() string {
 	if m.loading {
 		if m.streamContent != "" {
 			fmt.Fprintf(&b, "%s Streaming...", m.spinner.View())
+		} else if m.activeToolCall != "" {
+			fmt.Fprintf(&b, "%s %s", m.spinner.View(), toolStyle.Render("Running tool: "+m.activeToolCall+"..."))
 		} else {
 			fmt.Fprintf(&b, "%s Thinking...", m.spinner.View())
 		}
@@ -310,6 +337,30 @@ func (m Model) View() string {
 	b.WriteString(helpStyle.Render("Enter: send | Ctrl+C: quit"))
 
 	return b.String()
+}
+
+// formatToolArgs formats a tool call's args map into a compact string,
+// truncated to maxLen characters.
+func formatToolArgs(args map[string]any, maxLen int) string {
+	if len(args) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(args))
+	for k := range args {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var parts []string
+	for _, k := range keys {
+		v := fmt.Sprintf("%v", args[k])
+		parts = append(parts, k+": "+v)
+	}
+	result := strings.Join(parts, ", ")
+	if len(result) > maxLen {
+		result = result[:maxLen] + "..."
+	}
+	return result
 }
 
 // Run creates a Model and runs the Bubble Tea program.

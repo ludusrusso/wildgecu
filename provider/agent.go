@@ -15,13 +15,16 @@ var ErrDone = errors.New("agent loop done")
 // It returns the tool result string. Return ErrDone to stop the loop early.
 type ToolExecutor func(ctx context.Context, tc ToolCall) (string, error)
 
+// ToolCallCallback is invoked before each tool execution with the full ToolCall.
+type ToolCallCallback func(tc ToolCall)
+
 // RunAgentLoopStream is like RunAgentLoop but streams the final text response.
 // Intermediate tool-call iterations use blocking Generate. Only the final
 // text-only response streams chunks via onChunk.
-func RunAgentLoopStream(ctx context.Context, p Provider, systemPrompt string, messages []Message, tools []Tool, execute ToolExecutor, onChunk StreamCallback, dbg *debug.Logger) ([]Message, *Response, error) {
+func RunAgentLoopStream(ctx context.Context, p Provider, systemPrompt string, messages []Message, tools []Tool, execute ToolExecutor, onChunk StreamCallback, onToolCall ToolCallCallback, dbg *debug.Logger) ([]Message, *Response, error) {
 	sp, canStream := p.(StreamProvider)
 	if !canStream {
-		return RunAgentLoop(ctx, p, systemPrompt, messages, tools, execute, dbg)
+		return RunAgentLoop(ctx, p, systemPrompt, messages, tools, execute, onToolCall, dbg)
 	}
 
 	for {
@@ -69,6 +72,9 @@ func RunAgentLoopStream(ctx context.Context, p Provider, systemPrompt string, me
 		messages = append(messages, resp.Message)
 		for _, tc := range resp.Message.ToolCalls {
 			dbg.ToolCall(tc.Name, tc.Args)
+			if onToolCall != nil {
+				onToolCall(tc)
+			}
 			result, err := execute(ctx, tc)
 			if err != nil {
 				if errors.Is(err, ErrDone) {
@@ -87,7 +93,7 @@ func RunAgentLoopStream(ctx context.Context, p Provider, systemPrompt string, me
 
 // RunAgentLoop runs the generate-execute cycle until the model produces
 // a text response (no tool calls) or the executor signals ErrDone.
-func RunAgentLoop(ctx context.Context, p Provider, systemPrompt string, messages []Message, tools []Tool, execute ToolExecutor, dbg *debug.Logger) ([]Message, *Response, error) {
+func RunAgentLoop(ctx context.Context, p Provider, systemPrompt string, messages []Message, tools []Tool, execute ToolExecutor, onToolCall ToolCallCallback, dbg *debug.Logger) ([]Message, *Response, error) {
 	for {
 		dbg.GenerateRequest(len(messages), len(tools))
 
@@ -114,6 +120,9 @@ func RunAgentLoop(ctx context.Context, p Provider, systemPrompt string, messages
 
 		for _, tc := range resp.Message.ToolCalls {
 			dbg.ToolCall(tc.Name, tc.Args)
+			if onToolCall != nil {
+				onToolCall(tc)
+			}
 			result, err := execute(ctx, tc)
 			if err != nil {
 				if errors.Is(err, ErrDone) {

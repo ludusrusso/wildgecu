@@ -54,7 +54,7 @@ func RunMemoryAgent(ctx context.Context, p provider.Provider, home homer.Homer, 
 		{Role: provider.RoleUser, Content: userMsg.String()},
 	}
 
-	_, _, err := provider.RunAgentLoop(ctx, p, memoryAgentPrompt, msgs, registry.Tools(), registry.Executor(), nil)
+	_, _, err := provider.RunAgentLoop(ctx, p, memoryAgentPrompt, msgs, registry.Tools(), registry.Executor(), nil, nil)
 	if err != nil && err != provider.ErrDone {
 		return fmt.Errorf("memory agent: %w", err)
 	}

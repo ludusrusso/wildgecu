@@ -29,6 +29,9 @@ func writeSoul(h homer.Homer, content string) error {
 // loadWorkspaceFile reads a file from the workspace Homer.
 // Returns "" if the file does not exist.
 func loadWorkspaceFile(ws homer.Homer, filename string) (string, error) {
+	if ws == nil {
+		return "", nil
+	}
 	data, err := ws.Get(filename)
 	if errors.Is(err, homer.ErrNotFound) {
 		return "", nil
