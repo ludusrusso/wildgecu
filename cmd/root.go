@@ -30,6 +30,7 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default: ./gonesis.yaml)")
+	rootCmd.Flags().BoolVar(&debugFlag, "debug", false, "enable debug logging to ~/.gonesis/debug/<timestamp>.md")
 }
 
 func initConfig() {

@@ -15,6 +15,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+var debugFlag bool
+
 var chatCmd = &cobra.Command{
 	Use:   "chat",
 	Short: "Start an interactive chat session",
@@ -23,6 +25,7 @@ var chatCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(chatCmd)
+	chatCmd.Flags().BoolVar(&debugFlag, "debug", false, "enable debug logging to ~/.gonesis/debug/<timestamp>.md")
 }
 
 func runChat(cmd *cobra.Command, args []string) error {
@@ -77,5 +80,6 @@ func runChat(cmd *cobra.Command, args []string) error {
 		Home:       home,
 		Workspace:  workspace,
 		SkillsHome: skillsHome,
+		Debug:      debugFlag,
 	})
 }
