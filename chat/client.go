@@ -79,6 +79,15 @@ func (c *Client) ReadEvent() (*Event, error) {
 	return &ev, nil
 }
 
+
+// InterruptSession asks the daemon to interrupt the current turn of the session.
+func (c *Client) InterruptSession(sessionID string) error {
+	return c.encoder.Encode(request{
+		Type:      "session.interrupt",
+		SessionID: sessionID,
+	})
+}
+
 // CloseSession asks the daemon to close and finalize the session.
 func (c *Client) CloseSession(sessionID string) error {
 	return c.encoder.Encode(request{

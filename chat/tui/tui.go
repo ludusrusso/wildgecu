@@ -124,7 +124,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Quit
 		case tea.KeyEsc:
-			// TODO: interrupt support would require a cancel request to daemon
+			if m.loading && m.sessionID != "" {
+				m.client.InterruptSession(m.sessionID)
+			}
 			return m, nil
 		case tea.KeyEnter:
 			if m.loading || m.sessionID == "" {

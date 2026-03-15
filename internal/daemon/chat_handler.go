@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net"
+	"sync"
 )
 
 // ChatRequest is a client→server message on a NDJSON chat connection.
@@ -30,8 +31,15 @@ func (s *SocketServer) handleChatConnection(conn net.Conn, firstReq *ChatRequest
 	decoder := json.NewDecoder(conn)
 	encoder := json.NewEncoder(conn)
 
+	var encoderMu sync.Mutex
+	send := func(ev ChatEvent) {
+		encoderMu.Lock()
+		defer encoderMu.Unlock()
+		encoder.Encode(ev)
+	}
+
 	// Process the first request (already decoded by the dispatcher).
-	s.dispatchChatRequest(firstReq, conn, encoder, sessions, logger)
+	s.dispatchChatRequest(firstReq, send, sessions, logger)
 
 	// Continue reading subsequent requests on the same connection.
 	for {
@@ -39,16 +47,16 @@ func (s *SocketServer) handleChatConnection(conn net.Conn, firstReq *ChatRequest
 		if err := decoder.Decode(&req); err != nil {
 			return // connection closed or error
 		}
-		s.dispatchChatRequest(&req, conn, encoder, sessions, logger)
+		s.dispatchChatRequest(&req, send, sessions, logger)
 	}
 }
 
-func (s *SocketServer) dispatchChatRequest(req *ChatRequest, conn net.Conn, encoder *json.Encoder, sessions *SessionManager, logger *slog.Logger) {
+func (s *SocketServer) dispatchChatRequest(req *ChatRequest, send func(ChatEvent), sessions *SessionManager, logger *slog.Logger) {
 	switch req.Type {
 	case "session.create":
 		sess := sessions.Create()
 		logger.Info("session created", "session_id", sess.ID)
-		encoder.Encode(ChatEvent{
+		send(ChatEvent{
 			Type:      "session.created",
 			SessionID: sess.ID,
 			Welcome:   sessions.WelcomeText(),
@@ -57,17 +65,21 @@ func (s *SocketServer) dispatchChatRequest(req *ChatRequest, conn net.Conn, enco
 	case "session.resume":
 		sess := sessions.Get(req.SessionID)
 		if sess == nil {
-			encoder.Encode(ChatEvent{Type: "error", Message: "session not found: " + req.SessionID})
+			send(ChatEvent{Type: "error", Message: "session not found: " + req.SessionID})
 			return
 		}
-		encoder.Encode(ChatEvent{
+		send(ChatEvent{
 			Type:      "session.created",
 			SessionID: sess.ID,
 			Welcome:   sessions.WelcomeText(),
 		})
 
 	case "message":
-		s.handleChatMessage(req, encoder, sessions, logger)
+		go s.handleChatMessage(req, send, sessions, logger)
+
+	case "session.interrupt":
+		logger.Info("session interrupted", "session_id", req.SessionID)
+		sessions.Interrupt(req.SessionID)
 
 	case "session.close":
 		logger.Info("session closed", "session_id", req.SessionID)
@@ -75,19 +87,19 @@ func (s *SocketServer) dispatchChatRequest(req *ChatRequest, conn net.Conn, enco
 	}
 }
 
-func (s *SocketServer) handleChatMessage(req *ChatRequest, encoder *json.Encoder, sessions *SessionManager, logger *slog.Logger) {
+func (s *SocketServer) handleChatMessage(req *ChatRequest, send func(ChatEvent), sessions *SessionManager, logger *slog.Logger) {
 	onChunk := func(chunk string) {
-		encoder.Encode(ChatEvent{Type: "chunk", Content: chunk})
+		send(ChatEvent{Type: "chunk", Content: chunk})
 	}
 	onToolCall := func(name string, args string) {
-		encoder.Encode(ChatEvent{Type: "tool_call", Name: name, Args: args})
+		send(ChatEvent{Type: "tool_call", Name: name, Args: args})
 	}
 
 	content, err := sessions.RunTurnStream(s.ctx, req.SessionID, req.Content, onChunk, onToolCall)
 	if err != nil {
 		logger.Error("chat turn error", "session_id", req.SessionID, "error", err)
-		encoder.Encode(ChatEvent{Type: "error", Message: err.Error()})
+		send(ChatEvent{Type: "error", Message: err.Error()})
 		return
 	}
-	encoder.Encode(ChatEvent{Type: "done", Content: content})
+	send(ChatEvent{Type: "done", Content: content})
 }

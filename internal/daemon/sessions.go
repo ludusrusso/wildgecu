@@ -27,6 +27,8 @@ type ManagedSession struct {
 	Messages  []provider.Message
 	mu        sync.Mutex
 	createdAt time.Time
+	cancel    context.CancelFunc
+	cancelMu  sync.Mutex
 }
 
 // NewSessionManager calls agent.Prepare to build the shared session.Config.
@@ -90,6 +92,20 @@ func (sm *SessionManager) Close(ctx context.Context, id string) {
 	_ = agent.Finalize(ctx, sm.agentCfg, sess.Messages)
 }
 
+
+// Interrupt cancels the current turn if one is running.
+func (sm *SessionManager) Interrupt(id string) {
+	sess := sm.Get(id)
+	if sess == nil {
+		return
+	}
+	sess.cancelMu.Lock()
+	defer sess.cancelMu.Unlock()
+	if sess.cancel != nil {
+		sess.cancel()
+	}
+}
+
 // WelcomeText returns the configured welcome text.
 func (sm *SessionManager) WelcomeText() string {
 	return sm.chatCfg.WelcomeText
@@ -111,6 +127,17 @@ func (sm *SessionManager) RunTurnStream(ctx context.Context, id string, input st
 
 	sess.mu.Lock()
 	defer sess.mu.Unlock()
+
+	ctx, cancel := context.WithCancel(ctx)
+	sess.cancelMu.Lock()
+	sess.cancel = cancel
+	sess.cancelMu.Unlock()
+	defer func() {
+		sess.cancelMu.Lock()
+		sess.cancel = nil
+		sess.cancelMu.Unlock()
+		cancel()
+	}()
 
 	// Wire up the tool call callback on the shared config.
 	// We make a shallow copy so we don't mutate the shared config.
