@@ -3,8 +3,8 @@ package session
 import (
 	"context"
 
-	"gonesis/debug"
-	"gonesis/provider"
+	"wildgecu/debug"
+	"wildgecu/provider"
 )
 
 // Config holds everything needed to run a conversational loop.

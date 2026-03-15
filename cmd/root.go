@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"gonesis/x/config"
+	"wildgecu/x/config"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -17,8 +17,8 @@ var cfgFile string
 var debugFlag bool
 
 var rootCmd = &cobra.Command{
-	Use:   "gonesis",
-	Short: "Gonesis - an AI-powered coding agent",
+	Use:   "wildgecu",
+	Short: "Wildgecu - an AI-powered coding agent",
 	RunE:  runChat,
 }
 
@@ -30,8 +30,8 @@ func Execute() {
 
 func init() {
 	cobra.OnInitialize(initConfig)
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default: ./gonesis.yaml)")
-	rootCmd.Flags().BoolVar(&debugFlag, "debug", false, "enable debug logging to ~/.gonesis/debug/<timestamp>.md")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default: ./wildgecu.yaml)")
+	rootCmd.Flags().BoolVar(&debugFlag, "debug", false, "enable debug logging to ~/.wildgecu/debug/<timestamp>.md")
 }
 
 func initConfig() {
@@ -42,7 +42,7 @@ func initConfig() {
 	if cfgFile != "" {
 		viper.SetConfigFile(cfgFile)
 	} else {
-		viper.SetConfigName("gonesis")
+		viper.SetConfigName("wildgecu")
 		viper.SetConfigType("yaml")
 
 		if home, err := config.GlobalHome(); err == nil {

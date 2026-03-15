@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	"gonesis/debug"
-	"gonesis/homer"
-	"gonesis/provider"
-	"gonesis/provider/tool"
-	"gonesis/session"
+	"wildgecu/debug"
+	"wildgecu/homer"
+	"wildgecu/provider"
+	"wildgecu/provider/tool"
+	"wildgecu/session"
 )
 
 // Config holds the configuration needed to run the agent.
@@ -19,7 +19,7 @@ type Config struct {
 	Home       homer.Homer
 	Workspace  homer.Homer
 	SkillsHome homer.Homer
-	HomeDir    string // absolute path to ~/.gonesis, used as bash tool working directory
+	HomeDir    string // absolute path to ~/.wildgecu, used as bash tool working directory
 	Debug      bool
 }
 
@@ -48,7 +48,7 @@ func Prepare(ctx context.Context, cfg Config) (*session.Config, *debug.Logger, e
 		// Bootstrap needs to run in the old direct way.
 		// For now, skip bootstrap when running under daemon.
 		// The daemon requires a pre-existing soul.
-		return nil, dbg, fmt.Errorf("soul not found: run 'gonesis chat' directly to bootstrap your agent first")
+		return nil, dbg, fmt.Errorf("soul not found: run 'wildgecu chat' directly to bootstrap your agent first")
 	}
 
 	tools := loadTools(cfg.SkillsHome, cfg.HomeDir)

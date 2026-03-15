@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"gonesis/homer"
+	"wildgecu/homer"
 )
 
 func TestParseValid(t *testing.T) {

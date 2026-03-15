@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"gonesis/internal/daemon"
+	"wildgecu/internal/daemon"
 
 	"github.com/spf13/cobra"
 )

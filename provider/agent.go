@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"gonesis/debug"
+	"wildgecu/debug"
 )
 
 // ErrDone is a sentinel error returned by a ToolExecutor to signal

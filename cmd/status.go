@@ -6,7 +6,7 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"gonesis/internal/daemon"
+	"wildgecu/internal/daemon"
 
 	"github.com/spf13/cobra"
 )

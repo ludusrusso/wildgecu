@@ -7,9 +7,9 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"gonesis/homer"
-	"gonesis/skill"
-	"gonesis/x/config"
+	"wildgecu/homer"
+	"wildgecu/skill"
+	"wildgecu/x/config"
 
 	"github.com/spf13/cobra"
 )
@@ -54,7 +54,7 @@ func skillLsCmd() *cobra.Command {
 
 			if len(skills) == 0 {
 				fmt.Println("No skills found.")
-				fmt.Println("Use 'gonesis skill add' to create one.")
+				fmt.Println("Use 'wildgecu skill add' to create one.")
 				return nil
 			}
 

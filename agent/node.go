@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"time"
 
-	"gonesis/provider/tool"
+	"wildgecu/provider/tool"
 )
 
 // NodeInput is the input for the node tool.

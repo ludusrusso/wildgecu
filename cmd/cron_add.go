@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	"gonesis/cron"
-	"gonesis/internal/daemon"
+	"wildgecu/cron"
+	"wildgecu/internal/daemon"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"

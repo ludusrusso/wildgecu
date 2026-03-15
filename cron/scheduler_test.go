@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"testing"
 
-	"gonesis/homer"
+	"wildgecu/homer"
 )
 
 func newTestScheduler(t *testing.T, crons homer.Homer) *Scheduler {

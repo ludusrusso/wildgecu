@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"gonesis/chat/tui"
-	"gonesis/x/config"
+	"wildgecu/chat/tui"
+	"wildgecu/x/config"
 
 	"github.com/spf13/cobra"
 )
@@ -22,12 +22,12 @@ func init() {
 }
 
 func runChat(cmd *cobra.Command, args []string) error {
-	socketPath, err := config.GlobalFilePath("gonesis.sock")
+	socketPath, err := config.GlobalFilePath("wildgecu.sock")
 	if err != nil {
 		return fmt.Errorf("resolve socket path: %w", err)
 	}
 	if _, err := os.Stat(socketPath); err != nil {
-		return fmt.Errorf("daemon not running, start it with: gonesis start")
+		return fmt.Errorf("daemon not running, start it with: wildgecu start")
 	}
 
 	ctx := context.Background()

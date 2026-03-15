@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"gonesis/agent"
-	"gonesis/provider"
-	"gonesis/session"
+	"wildgecu/agent"
+	"wildgecu/provider"
+	"wildgecu/session"
 
 	"github.com/google/uuid"
 )

@@ -15,14 +15,14 @@ type Logger struct {
 	file *os.File
 }
 
-// New creates a new debug logger. It creates a file at ~/.gonesis/debug/<timestamp>.md.
+// New creates a new debug logger. It creates a file at ~/.wildgecu/debug/<timestamp>.md.
 func New() (*Logger, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("debug: get home dir: %w", err)
 	}
 
-	dir := filepath.Join(home, ".gonesis", "debug")
+	dir := filepath.Join(home, ".wildgecu", "debug")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("debug: create dir: %w", err)
 	}

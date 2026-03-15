@@ -3,7 +3,7 @@ package cmd
 import (
 	"os"
 
-	"gonesis/internal/daemon"
+	"wildgecu/internal/daemon"
 
 	"github.com/spf13/cobra"
 )

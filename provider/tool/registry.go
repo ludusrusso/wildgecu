@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"gonesis/provider"
+	"wildgecu/provider"
 )
 
 // Registry collects tools and provides a single ToolExecutor.

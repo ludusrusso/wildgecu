@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"gonesis/homer"
-	"gonesis/provider/tool"
-	"gonesis/skill"
+	"wildgecu/homer"
+	"wildgecu/provider/tool"
+	"wildgecu/skill"
 )
 
 // GetTimeInput is the input for the get_current_time tool.

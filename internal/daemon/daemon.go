@@ -11,12 +11,12 @@ import (
 	"syscall"
 	"time"
 
-	"gonesis/agent"
-	"gonesis/cron"
-	"gonesis/homer"
-	"gonesis/provider/gemini"
-	"gonesis/x/config"
-	"gonesis/chat/telegram"
+	"wildgecu/agent"
+	"wildgecu/cron"
+	"wildgecu/homer"
+	"wildgecu/provider/gemini"
+	"wildgecu/x/config"
+	"wildgecu/chat/telegram"
 )
 
 // Config holds daemon configuration.

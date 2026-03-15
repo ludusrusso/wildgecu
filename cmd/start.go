@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"os"
 
-	"gonesis/internal/daemon"
-	"gonesis/x/config"
+	"wildgecu/internal/daemon"
+	"wildgecu/x/config"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -47,7 +47,7 @@ func startCmd() *cobra.Command {
 }
 
 func runDaemon() error {
-	logPath, err := config.GlobalFilePath("gonesis.log")
+	logPath, err := config.GlobalFilePath("wildgecu.log")
 	if err != nil {
 		return err
 	}

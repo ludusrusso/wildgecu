@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"text/tabwriter"
 
-	"gonesis/cron"
-	"gonesis/homer"
-	"gonesis/internal/daemon"
-	"gonesis/x/config"
+	"wildgecu/cron"
+	"wildgecu/homer"
+	"wildgecu/internal/daemon"
+	"wildgecu/x/config"
 
 	"github.com/spf13/cobra"
 )
@@ -54,7 +54,7 @@ func cronLsCmd() *cobra.Command {
 
 			if len(jobs) == 0 {
 				fmt.Println("No cron jobs found.")
-				fmt.Println("Use 'gonesis cron add' to create one.")
+				fmt.Println("Use 'wildgecu cron add' to create one.")
 				return nil
 			}
 

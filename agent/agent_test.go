@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"gonesis/homer"
-	"gonesis/provider"
+	"wildgecu/homer"
+	"wildgecu/provider"
 )
 
 // --- LoadSoul ---

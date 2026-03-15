@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 )
 
-// DirName is the name of the gonesis configuration directory.
-const DirName = ".gonesis"
+// DirName is the name of the wildgecu configuration directory.
+const DirName = ".wildgecu"
 
-// GlobalHome returns the path to ~/.gonesis/, creating it if necessary.
+// GlobalHome returns the path to ~/.wildgecu/, creating it if necessary.
 func GlobalHome() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -17,12 +17,12 @@ func GlobalHome() (string, error) {
 	}
 	dir := filepath.Join(home, DirName)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("create gonesis home: %w", err)
+		return "", fmt.Errorf("create wildgecu home: %w", err)
 	}
 	return dir, nil
 }
 
-// GlobalFilePath returns the path to ~/.gonesis/<filename>.
+// GlobalFilePath returns the path to ~/.wildgecu/<filename>.
 func GlobalFilePath(filename string) (string, error) {
 	dir, err := GlobalHome()
 	if err != nil {
@@ -31,28 +31,28 @@ func GlobalFilePath(filename string) (string, error) {
 	return filepath.Join(dir, filename), nil
 }
 
-// ProjectDir returns the path to <baseDir>/.gonesis/, creating it if necessary.
+// ProjectDir returns the path to <baseDir>/.wildgecu/, creating it if necessary.
 func ProjectDir(baseDir string) (string, error) {
 	dir := filepath.Join(baseDir, DirName)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("create project gonesis dir: %w", err)
+		return "", fmt.Errorf("create project wildgecu dir: %w", err)
 	}
 	return dir, nil
 }
 
-// ProjectFilePath returns the path to <baseDir>/.gonesis/<filename>.
+// ProjectFilePath returns the path to <baseDir>/.wildgecu/<filename>.
 func ProjectFilePath(baseDir, filename string) (string, error) {
 	dir := filepath.Join(baseDir, DirName)
 	return filepath.Join(dir, filename), nil
 }
 
-const defaultConfig = `# gonesis configuration
+const defaultConfig = `# wildgecu configuration
 gemini_api_key: ""
 model: "gemini-3-flash-preview"
 # base_folder: "/path/to/project"
 `
 
-// EnsureConfigFile creates a default gonesis.yaml in ~/.gonesis/ if no config
+// EnsureConfigFile creates a default wildgecu.yaml in ~/.wildgecu/ if no config
 // file is currently loaded. Returns the path to the config file and whether
 // it was newly created.
 func EnsureConfigFile(viperConfigUsed string) (string, bool, error) {
@@ -60,7 +60,7 @@ func EnsureConfigFile(viperConfigUsed string) (string, bool, error) {
 		return viperConfigUsed, false, nil
 	}
 
-	configPath, err := GlobalFilePath("gonesis.yaml")
+	configPath, err := GlobalFilePath("wildgecu.yaml")
 	if err != nil {
 		return "", false, fmt.Errorf("resolve config path: %w", err)
 	}

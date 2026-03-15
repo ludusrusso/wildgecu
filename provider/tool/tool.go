@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"gonesis/provider"
+	"wildgecu/provider"
 )
 
 // Tool is the interface that all typed tools implement.

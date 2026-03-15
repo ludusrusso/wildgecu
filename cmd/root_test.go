@@ -9,11 +9,11 @@ import (
 )
 
 func TestInitConfig_IgnoresCurrentDirectory(t *testing.T) {
-	// Create a gonesis.yaml in a temp dir that should NOT be picked up.
+	// Create a wildgecu.yaml in a temp dir that should NOT be picked up.
 	tmpDir := t.TempDir()
 
 	cfgContent := []byte("gemini_api_key: from-local-dir\nmodel: local-model\n")
-	if err := os.WriteFile(filepath.Join(tmpDir, "gonesis.yaml"), cfgContent, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "wildgecu.yaml"), cfgContent, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -47,13 +47,13 @@ func TestInitConfig_LoadsFromGlobalHome(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
 
-	globalDir := filepath.Join(tmpHome, ".gonesis")
+	globalDir := filepath.Join(tmpHome, ".wildgecu")
 	if err := os.MkdirAll(globalDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	cfgContent := []byte("gemini_api_key: from-global-home\nmodel: global-model\n")
-	if err := os.WriteFile(filepath.Join(globalDir, "gonesis.yaml"), cfgContent, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(globalDir, "wildgecu.yaml"), cfgContent, 0o644); err != nil {
 		t.Fatal(err)
 	}
 

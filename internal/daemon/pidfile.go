@@ -7,12 +7,12 @@ import (
 	"strings"
 	"syscall"
 
-	"gonesis/x/config"
+	"wildgecu/x/config"
 )
 
-// WritePID writes the current process PID to ~/.gonesis/gonesis.pid.
+// WritePID writes the current process PID to ~/.wildgecu/wildgecu.pid.
 func WritePID() error {
-	path, err := config.GlobalFilePath("gonesis.pid")
+	path, err := config.GlobalFilePath("wildgecu.pid")
 	if err != nil {
 		return err
 	}
@@ -21,7 +21,7 @@ func WritePID() error {
 
 // RemovePID removes the PID file. It is idempotent.
 func RemovePID() {
-	path, err := config.GlobalFilePath("gonesis.pid")
+	path, err := config.GlobalFilePath("wildgecu.pid")
 	if err != nil {
 		return
 	}
@@ -30,7 +30,7 @@ func RemovePID() {
 
 // ReadPID reads and returns the PID from the PID file.
 func ReadPID() (int, error) {
-	path, err := config.GlobalFilePath("gonesis.pid")
+	path, err := config.GlobalFilePath("wildgecu.pid")
 	if err != nil {
 		return 0, err
 	}

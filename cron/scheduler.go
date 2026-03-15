@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"gonesis/homer"
+	"wildgecu/homer"
 
 	"github.com/go-co-op/gocron/v2"
 )

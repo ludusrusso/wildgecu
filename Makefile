@@ -2,7 +2,7 @@ test:
 	@go test ./...
 
 build:
-	@go build -o gonesis .
+	@go build -o wildgecu .
 
 # lint-install:
 # 	@mise install

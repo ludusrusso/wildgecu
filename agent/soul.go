@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"gonesis/homer"
+	"wildgecu/homer"
 )
 
 // LoadSoul reads SOUL.md from the home Homer. Returns (content, err).

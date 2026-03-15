@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"gonesis/skill"
+	"wildgecu/skill"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"

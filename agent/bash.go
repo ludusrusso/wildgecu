@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"time"
 
-	"gonesis/provider/tool"
+	"wildgecu/provider/tool"
 )
 
 // BashInput is the input for the bash tool.

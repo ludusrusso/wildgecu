@@ -13,7 +13,7 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 
-	"gonesis/chat"
+	"wildgecu/chat"
 )
 
 const (

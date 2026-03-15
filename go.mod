@@ -1,4 +1,4 @@
-module gonesis
+module wildgecu
 
 go 1.26
 

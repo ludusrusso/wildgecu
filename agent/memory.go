@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"gonesis/homer"
-	"gonesis/provider"
-	"gonesis/provider/tool"
+	"wildgecu/homer"
+	"wildgecu/provider"
+	"wildgecu/provider/tool"
 )
 
 // WriteMemoryInput is the input for the write_memory tool.

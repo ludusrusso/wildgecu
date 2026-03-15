@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"gonesis/homer"
-	"gonesis/provider"
-	"gonesis/provider/tool"
-	"gonesis/session"
+	"wildgecu/homer"
+	"wildgecu/provider"
+	"wildgecu/provider/tool"
+	"wildgecu/session"
 )
 
 // WriteSoulInput is the input for the write_soul tool.

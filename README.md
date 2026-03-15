@@ -1,4 +1,4 @@
-# gonesis
+# wildgecu
 
 A bootstrappable AI agent with personality and identity, built in Go. On first run, the agent interviews you to discover who it should be, then writes its own soul to disk. Every session after that, it wakes up already knowing itself.
 
@@ -33,7 +33,7 @@ First run:                              Every run after:
 ┌─────────────────┐                            ▼
 │  Agent calls    │                     ┌─────────────────┐
 │  write_soul     │                     │    Chat TUI     │
-│  → .gonesis/    │                     │  (normal mode)  │
+│  → .wildgecu/    │                     │  (normal mode)  │
 │    SOUL.md      │                     └─────────────────┘
 └──────┬──────────┘
        │
@@ -47,7 +47,7 @@ First run:                              Every run after:
 
 ## Cron jobs
 
-The daemon can execute scheduled LLM prompts. Cron jobs are defined as markdown files with YAML frontmatter in `~/.gonesis/crons/`. Results are written to `~/.gonesis/cron-results/`.
+The daemon can execute scheduled LLM prompts. Cron jobs are defined as markdown files with YAML frontmatter in `~/.wildgecu/crons/`. Results are written to `~/.wildgecu/cron-results/`.
 
 ### Cron file format
 
@@ -65,7 +65,7 @@ The frontmatter requires `name` and `cron` (standard 5-field cron expression). E
 ### How it works
 
 ```
-~/.gonesis/crons/                        ~/.gonesis/cron-results/
+~/.wildgecu/crons/                        ~/.wildgecu/cron-results/
 ┌─────────────────┐                      ┌──────────────────────────────┐
 │ daily-summary.md│──┐                   │ daily-summary-20260304-09... │
 │ weekly-report.md│  │                   │ weekly-report-20260303-00... │
@@ -84,9 +84,9 @@ The frontmatter requires `name` and `cron` (standard 5-field cron expression). E
               └─────────────┘
 ```
 
-- The **scheduler** loads all `*.md` files from `~/.gonesis/crons/` and registers them with gocron
-- On each trigger, the **executor** sends the prompt to the configured LLM provider (no tools, for safety) and writes the response to `~/.gonesis/cron-results/<name>-<YYYYMMDD-HHMMSS>.md`
-- `gonesis cron add` / `gonesis cron rm` modify files and send a `cron-reload` command to the running daemon via the Unix socket
+- The **scheduler** loads all `*.md` files from `~/.wildgecu/crons/` and registers them with gocron
+- On each trigger, the **executor** sends the prompt to the configured LLM provider (no tools, for safety) and writes the response to `~/.wildgecu/cron-results/<name>-<YYYYMMDD-HHMMSS>.md`
+- `wildgecu cron add` / `wildgecu cron rm` modify files and send a `cron-reload` command to the running daemon via the Unix socket
 - The scheduler requires `gemini_api_key` to be configured; without it, cron is disabled and the daemon logs a notice
 
 ## Prerequisites
@@ -97,69 +97,69 @@ The frontmatter requires `name` and `cron` (standard 5-field cron expression). E
 ## Getting started
 
 ```bash
-git clone https://github.com/ludusrusso/gonesis.git
-cd gonesis
+git clone https://github.com/ludusrusso/wildgecu.git
+cd wildgecu
 
 export GEMINI_API_KEY="your-api-key"
 
 go run .
 ```
 
-On first run, the agent will start a bootstrap conversation to establish its identity. Answer a few questions and it will write `.gonesis/SOUL.md` automatically, then switch to normal chat mode.
+On first run, the agent will start a bootstrap conversation to establish its identity. Answer a few questions and it will write `.wildgecu/SOUL.md` automatically, then switch to normal chat mode.
 
 ## CLI commands
 
-Gonesis is a single binary. Chat is the default command; daemon management is available as subcommands.
+Wildgecu is a single binary. Chat is the default command; daemon management is available as subcommands.
 
 ```bash
 # Chat (default)
-gonesis              # interactive chat session
-gonesis chat         # same thing, explicit
+wildgecu              # interactive chat session
+wildgecu chat         # same thing, explicit
 
 # Daemon lifecycle
-gonesis start        # start the background daemon
-gonesis stop         # stop the daemon
-gonesis restart      # stop + start
-gonesis status       # show daemon status (pid, uptime, version)
-gonesis health       # exit 0 if daemon is healthy, 1 otherwise
-gonesis logs         # show last 50 log lines
-gonesis logs -f      # follow log output
+wildgecu start        # start the background daemon
+wildgecu stop         # stop the daemon
+wildgecu restart      # stop + start
+wildgecu status       # show daemon status (pid, uptime, version)
+wildgecu health       # exit 0 if daemon is healthy, 1 otherwise
+wildgecu logs         # show last 50 log lines
+wildgecu logs -f      # follow log output
 
 # Cron jobs
-gonesis cron ls      # list all scheduled jobs
-gonesis cron add     # add a new cron job (interactive TUI)
-gonesis cron rm test # remove a cron job by name
+wildgecu cron ls      # list all scheduled jobs
+wildgecu cron add     # add a new cron job (interactive TUI)
+wildgecu cron rm test # remove a cron job by name
 
 # System service
-gonesis install      # install as a system service
-gonesis uninstall    # remove the system service
+wildgecu install      # install as a system service
+wildgecu uninstall    # remove the system service
 
 # Self-update
-gonesis update --url <binary-url>   # trigger a self-update
+wildgecu update --url <binary-url>   # trigger a self-update
 ```
 
 Build with a version tag:
 
 ```bash
-go build -ldflags "-X gonesis/cmd.Version=1.0.0" -o gonesis .
+go build -ldflags "-X wildgecu/cmd.Version=1.0.0" -o wildgecu .
 ```
 
 ## Configuration
 
-Gonesis uses a unified home directory at `~/.gonesis/` for all global state.
+Wildgecu uses a unified home directory at `~/.wildgecu/` for all global state.
 
-### Global files (`~/.gonesis/`)
+### Global files (`~/.wildgecu/`)
 
 | File / Directory | Purpose                                                            |
 | ---------------- | ------------------------------------------------------------------ |
-| `gonesis.yaml`   | Configuration (API key, model, base folder) — created on first run |
-| `gonesis.pid`    | Daemon PID file                                                    |
-| `gonesis.sock`   | Daemon Unix domain socket                                          |
-| `gonesis.log`    | Daemon log file (JSON)                                             |
+| `wildgecu.yaml`   | Configuration (API key, model, base folder) — created on first run |
+| `wildgecu.pid`    | Daemon PID file                                                    |
+| `wildgecu.sock`   | Daemon Unix domain socket                                          |
+| `wildgecu.log`    | Daemon log file (JSON)                                             |
 | `crons/`         | Cron job definitions (markdown files with YAML frontmatter)        |
 | `cron-results/`  | Output from executed cron jobs                                     |
 
-### Project files (`.gonesis/` in working directory)
+### Project files (`.wildgecu/` in working directory)
 
 | File      | Purpose                                                                    |
 | --------- | -------------------------------------------------------------------------- |
@@ -170,10 +170,10 @@ Delete `SOUL.md` to re-run the bootstrap and give your agent a new identity.
 
 ### Config file
 
-The config file is searched in order: `./gonesis.yaml`, then `~/.gonesis/gonesis.yaml`. Override with `--config`:
+The config file is searched in order: `./wildgecu.yaml`, then `~/.wildgecu/wildgecu.yaml`. Override with `--config`:
 
 ```bash
-gonesis --config /path/to/config.yaml
+wildgecu --config /path/to/config.yaml
 ```
 
 Environment variables also work:
@@ -185,7 +185,7 @@ export GEMINI_API_KEY="your-key"
 ## Architecture
 
 ```
-gonesis.go                  # Entry point → cmd.Execute()
+wildgecu.go                  # Entry point → cmd.Execute()
 │
 ├── cmd/                    # CLI layer (Cobra)
 │   ├── root.go             # Root command, config init, Version var
@@ -247,10 +247,10 @@ gonesis.go                  # Entry point → cmd.Execute()
 
 ### Key design decisions
 
-- **Single binary**: All commands (chat, daemon management, service lifecycle) are subcommands of one `gonesis` binary — no separate `cmd/agent/` binary.
-- **Unified home (`~/.gonesis/`)**: Config, PID, socket, and logs all live under one directory, managed by `x/config`.
+- **Single binary**: All commands (chat, daemon management, service lifecycle) are subcommands of one `wildgecu` binary — no separate `cmd/agent/` binary.
+- **Unified home (`~/.wildgecu/`)**: Config, PID, socket, and logs all live under one directory, managed by `x/config`.
 - **`x/config` package**: Zero-dependency (stdlib only) shared package that all other packages import for path resolution. Prevents scattered `os.UserHomeDir()` + `filepath.Join()` patterns.
-- **Project-local `.gonesis/`**: Per-project identity files (`SOUL.md`, `USER.md`) stay in the working directory, separate from global daemon state.
+- **Project-local `.wildgecu/`**: Per-project identity files (`SOUL.md`, `USER.md`) stay in the working directory, separate from global daemon state.
 
 ## Adding a new provider
 

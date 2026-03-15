@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"gonesis/provider"
+	"wildgecu/provider"
 )
 
 // --- Schema generation ---

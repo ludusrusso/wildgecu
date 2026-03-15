@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"gonesis/x/config"
+	"wildgecu/x/config"
 )
 
 // Request is a command sent from the CLI to the daemon.
@@ -25,7 +25,7 @@ type Response struct {
 
 // sockPath returns the path to the Unix domain socket.
 func sockPath() (string, error) {
-	return config.GlobalFilePath("gonesis.sock")
+	return config.GlobalFilePath("wildgecu.sock")
 }
 
 // SendCommand sends a command to the running daemon and returns the response.

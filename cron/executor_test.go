@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"gonesis/homer"
-	"gonesis/provider"
+	"wildgecu/homer"
+	"wildgecu/provider"
 )
 
 // mockProvider returns a fixed response for testing.

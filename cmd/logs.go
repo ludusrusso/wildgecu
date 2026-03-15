@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"gonesis/x/config"
+	"wildgecu/x/config"
 
 	"github.com/spf13/cobra"
 )
@@ -21,7 +21,7 @@ func logsCmd() *cobra.Command {
 		Use:   "logs",
 		Short: "Show daemon logs",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			logPath, err := config.GlobalFilePath("gonesis.log")
+			logPath, err := config.GlobalFilePath("wildgecu.log")
 			if err != nil {
 				return err
 			}

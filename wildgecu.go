@@ -1,5 +1,5 @@
 package main
 
-import "gonesis/cmd"
+import "wildgecu/cmd"
 
 func main() { cmd.Execute() }

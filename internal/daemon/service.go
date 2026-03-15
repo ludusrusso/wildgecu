@@ -38,8 +38,8 @@ func (s *agentService) Stop(_ service.Service) error {
 
 func newServiceConfig() *service.Config {
 	return &service.Config{
-		Name:        "gonesis",
-		DisplayName: "Gonesis Agent",
+		Name:        "wildgecu",
+		DisplayName: "Wildgecu Agent",
 		Description: "Open-source AI agent daemon",
 		Executable:  os.Args[0],
 	}

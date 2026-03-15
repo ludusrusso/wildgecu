@@ -6,14 +6,14 @@ import (
 	"log/slog"
 	"time"
 
-	"gonesis/homer"
-	"gonesis/provider"
+	"wildgecu/homer"
+	"wildgecu/provider"
 )
 
 // ExecutorConfig holds the dependencies for executing a cron job.
 type ExecutorConfig struct {
 	Provider provider.Provider
-	Results  homer.Homer // ~/.gonesis/cron-results/
+	Results  homer.Homer // ~/.wildgecu/cron-results/
 	Logger   *slog.Logger
 }
 
