@@ -38,7 +38,7 @@ var fetchURLTool = tool.NewTool("fetch_url",
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, http.NoBody)
 		if err != nil {
 			return FetchURLOutput{}, fmt.Errorf("invalid url: %w", err)
 		}
