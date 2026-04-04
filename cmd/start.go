@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"os"
 
-	"wildgecu/internal/daemon"
+	"wildgecu/pkg/daemon"
 	"wildgecu/x/config"
 
 	"github.com/spf13/cobra"

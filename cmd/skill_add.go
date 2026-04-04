@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"wildgecu/skill"
+	"wildgecu/pkg/skill"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -188,7 +188,7 @@ func (m skillAddModel) parseTags() []string {
 
 func (m skillAddModel) save() tea.Cmd {
 	return func() tea.Msg {
-		h, err := skillsHomer()
+		h, err := skillsHome()
 		if err != nil {
 			return skillSaveResultMsg{err: err}
 		}

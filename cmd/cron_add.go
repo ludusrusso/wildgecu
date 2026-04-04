@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	"wildgecu/cron"
-	"wildgecu/internal/daemon"
+	"wildgecu/pkg/cron"
+	"wildgecu/pkg/daemon"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -169,7 +169,7 @@ type saveResultMsg struct{ err error }
 
 func (m cronAddModel) save() tea.Cmd {
 	return func() tea.Msg {
-		h, err := cronsHomer()
+		h, err := cronsHome()
 		if err != nil {
 			return saveResultMsg{err: err}
 		}

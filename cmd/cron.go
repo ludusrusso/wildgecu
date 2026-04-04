@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"text/tabwriter"
 
-	"wildgecu/cron"
-	"wildgecu/homer"
-	"wildgecu/internal/daemon"
+	"wildgecu/pkg/cron"
+	"wildgecu/x/home"
+	"wildgecu/pkg/daemon"
 	"wildgecu/x/config"
 
 	"github.com/spf13/cobra"
@@ -21,12 +21,12 @@ func init() {
 	rootCmd.AddCommand(cmd)
 }
 
-func cronsHomer() (homer.Homer, error) {
+func cronsHome() (home.Home, error) {
 	globalHome, err := config.GlobalHome()
 	if err != nil {
 		return nil, err
 	}
-	return homer.New(filepath.Join(globalHome, "crons"))
+	return home.New(filepath.Join(globalHome, "crons"))
 }
 
 func cronCmd() *cobra.Command {
@@ -42,7 +42,7 @@ func cronLsCmd() *cobra.Command {
 		Aliases: []string{"list"},
 		Short:   "List all cron jobs",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			h, err := cronsHomer()
+			h, err := cronsHome()
 			if err != nil {
 				return err
 			}
@@ -78,7 +78,7 @@ func cronRmCmd() *cobra.Command {
 		Short: "Remove a cron job",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			h, err := cronsHomer()
+			h, err := cronsHome()
 			if err != nil {
 				return err
 			}

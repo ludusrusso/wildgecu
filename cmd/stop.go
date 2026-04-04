@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"wildgecu/internal/daemon"
+	"wildgecu/pkg/daemon"
 
 	"github.com/spf13/cobra"
 )

@@ -228,59 +228,64 @@ wildgecu.go                  # Entry point → cmd.Execute()
 │   ├── cron.go / cron_add.go
 │   └── skill.go / skill_add.go
 │
-├── agent/                   # Agent logic
-│   ├── agent.go             # Run() — orchestrates bootstrap → chat
-│   ├── bootstrap.go         # Bootstrap interview + write_soul tool
-│   ├── soul.go              # Soul I/O and system prompt assembly
-│   ├── memory.go            # Memory persistence and curation
-│   ├── prompt.go            # Embeds AGENT.md, BOOTSTRAP.md, MEMORY_AGENT.md
-│   ├── AGENT.md             # Base agent behavior prompt
-│   ├── BOOTSTRAP.md         # Bootstrap conversation prompt
-│   └── MEMORY_AGENT.md      # Memory curation instructions
+├── pkg/                     # Core domain packages
+│   ├── agent/               # Agent logic
+│   │   ├── agent.go         # Prepare() / Finalize() — orchestrates bootstrap → chat
+│   │   ├── bootstrap.go     # Bootstrap interview + write_soul tool
+│   │   ├── soul.go          # Soul I/O and system prompt assembly
+│   │   ├── memory.go        # Memory persistence and curation
+│   │   ├── prompt.go        # Embeds AGENT.md, BOOTSTRAP.md, MEMORY_AGENT.md
+│   │   ├── AGENT.md         # Base agent behavior prompt
+│   │   ├── BOOTSTRAP.md     # Bootstrap conversation prompt
+│   │   └── MEMORY_AGENT.md  # Memory curation instructions
+│   │
+│   ├── provider/            # LLM provider abstraction
+│   │   ├── provider.go      # Provider interface, types
+│   │   ├── agent.go         # RunAgentLoop / RunAgentLoopStream
+│   │   ├── tool/            # Type-safe tool system (Tool, Registry, Executor)
+│   │   └── gemini/          # Google Gemini implementation
+│   │
+│   ├── session/             # Conversation management
+│   │   └── session.go       # RunTurn, RunTurnStream, callbacks
+│   │
+│   ├── chat/                # Chat frontends
+│   │   ├── tui/             # Bubble Tea terminal UI
+│   │   └── telegram/        # Telegram bot bridge
+│   │
+│   ├── cron/                # Cron scheduling
+│   │   ├── cron.go          # CronJob struct, Parse, LoadAll
+│   │   ├── executor.go      # Execute() — runs a single cron job
+│   │   └── scheduler.go     # Scheduler — wraps gocron
+│   │
+│   ├── skill/               # Skills system
+│   │   └── skill.go         # Skill struct, Parse, Load
+│   │
+│   └── daemon/              # Daemon infrastructure
+│       ├── daemon.go        # Main loop, socket server, signals
+│       ├── sessions.go      # SessionManager for concurrent chats
+│       ├── socket.go        # Unix socket server + command dispatch
+│       ├── chat_client.go   # NDJSON streaming client for TUI/Telegram
+│       ├── client.go        # Command-based IPC client
+│       ├── watchdog.go      # Periodic health checker
+│       ├── updater.go       # Self-update via binary replacement
+│       ├── pidfile.go
+│       └── service.go       # System service integration
 │
-├── provider/                # LLM provider abstraction
-│   ├── provider.go          # Provider interface, types
-│   ├── agent.go             # RunAgentLoop / RunAgentLoopStream
-│   ├── tool/                # Type-safe tool system (Tool, Registry, Executor)
-│   └── gemini/              # Google Gemini implementation
-│
-├── session/                 # Conversation management
-│   └── session.go           # RunTurn, RunTurnStream, callbacks
-│
-├── skill/                   # Skills system
-│   └── skill.go             # Skill struct, Parse, Load
-│
-├── chat/                    # Chat frontends
-│   ├── tui/                 # Bubble Tea terminal UI
-│   └── telegram/            # Telegram bot bridge
-│
-├── cron/                    # Cron scheduling
-│   ├── cron.go              # CronJob struct, Parse, LoadAll
-│   ├── executor.go          # Execute() — runs a single cron job
-│   └── scheduler.go         # Scheduler — wraps gocron
-│
-├── internal/daemon/         # Daemon infrastructure
-│   ├── daemon.go            # Main loop, socket server, signals
-│   ├── sessions.go          # SessionManager for concurrent chats
-│   ├── socket.go            # Unix socket server + command dispatch
-│   ├── watchdog.go          # Periodic health checker
-│   ├── updater.go           # Self-update via binary replacement
-│   ├── pidfile.go / client.go
-│   └── service.go           # System service integration
-│
-├── homer/                   # File abstraction (FSHomer, MemHomer)
-├── x/config/                # Shared config (GlobalHome, ProjectDir)
-├── debug/                   # Debug logging
-└── pkg/context/             # Context utilities
+└── x/                       # General-purpose utilities
+    ├── config/              # Shared config (GlobalHome, ProjectDir)
+    ├── home/                # File abstraction (Home, FSHome, MemHome)
+    ├── context/             # Context utilities
+    └── debug/               # Debug logging
 ```
 
 ### Key design decisions
 
 - **Single binary** — All commands (chat, daemon, cron, skills, service) are subcommands of one `wildgecu` binary.
+- **`pkg/` and `x/` layout** — Core domain packages live under `pkg/`, general-purpose utilities with no domain knowledge live under `x/`.
 - **Unified home (`~/.wildgecu/`)** — Config, PID, socket, logs, crons, and skills all live under one directory, managed by `x/config`.
 - **`x/config` package** — Zero-dependency (stdlib only) shared package that all other packages import for path resolution.
 - **Project-local `.wildgecu/`** — Per-project identity files (`SOUL.md`, `MEMORY.md`, `USER.md`) stay in the working directory, separate from global daemon state.
-- **Homer abstraction** — File operations are abstracted behind an interface (`FSHomer` for disk, `MemHomer` for tests), keeping the agent logic testable.
+- **Home abstraction** — File operations are abstracted behind an interface (`FSHome` for disk, `MemHome` for tests), keeping the agent logic testable.
 - **Parallel tool calling** — Independent tool calls within a single agent turn are executed concurrently for lower latency.
 
 ## Adding a new provider

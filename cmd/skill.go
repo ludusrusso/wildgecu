@@ -7,8 +7,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"wildgecu/homer"
-	"wildgecu/skill"
+	"wildgecu/x/home"
+	"wildgecu/pkg/skill"
 	"wildgecu/x/config"
 
 	"github.com/spf13/cobra"
@@ -21,12 +21,12 @@ func init() {
 	rootCmd.AddCommand(cmd)
 }
 
-func skillsHomer() (homer.Homer, error) {
+func skillsHome() (home.Home, error) {
 	globalHome, err := config.GlobalHome()
 	if err != nil {
 		return nil, err
 	}
-	return homer.New(filepath.Join(globalHome, "skills"))
+	return home.New(filepath.Join(globalHome, "skills"))
 }
 
 func skillCmd() *cobra.Command {
@@ -42,7 +42,7 @@ func skillLsCmd() *cobra.Command {
 		Aliases: []string{"list"},
 		Short:   "List all skills",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			h, err := skillsHomer()
+			h, err := skillsHome()
 			if err != nil {
 				return err
 			}
@@ -79,7 +79,7 @@ func skillRmCmd() *cobra.Command {
 		Short: "Remove a skill",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			h, err := skillsHomer()
+			h, err := skillsHome()
 			if err != nil {
 				return err
 			}
