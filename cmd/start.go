@@ -69,5 +69,6 @@ func runDaemon() error {
 		APIKey:        viper.GetString("gemini_api_key"),
 		Model:         viper.GetString("model"),
 		TelegramToken: viper.GetString("telegram_token"),
+		GoogleSearch:  viper.GetBool("google_search"),
 	})
 }

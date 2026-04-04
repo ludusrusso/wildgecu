@@ -10,12 +10,23 @@ import (
 
 // Provider implements provider.Provider using the Google Gemini API.
 type Provider struct {
-	client *genai.Client
-	model  string
+	client       *genai.Client
+	model        string
+	googleSearch bool
+}
+
+// Option configures a Gemini Provider.
+type Option func(*Provider)
+
+// WithGoogleSearch enables built-in Google Search grounding.
+func WithGoogleSearch() Option {
+	return func(p *Provider) {
+		p.googleSearch = true
+	}
 }
 
 // New creates a Gemini provider with the given API key and model name.
-func New(ctx context.Context, apiKey, model string) (*Provider, error) {
+func New(ctx context.Context, apiKey, model string, opts ...Option) (*Provider, error) {
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  apiKey,
 		Backend: genai.BackendGeminiAPI,
@@ -23,7 +34,11 @@ func New(ctx context.Context, apiKey, model string) (*Provider, error) {
 	if err != nil {
 		return nil, fmt.Errorf("gemini: create client: %w", err)
 	}
-	return &Provider{client: client, model: model}, nil
+	p := &Provider{client: client, model: model}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p, nil
 }
 
 func (p *Provider) GenerateStream(ctx context.Context, params *provider.GenerateParams) (<-chan provider.StreamChunk, <-chan error) {
@@ -41,6 +56,13 @@ func (p *Provider) GenerateStream(ctx context.Context, params *provider.Generate
 	}
 	if len(params.Tools) > 0 {
 		config.Tools = toTools(params.Tools)
+	}
+	if p.googleSearch {
+		config.Tools = append(config.Tools, &genai.Tool{GoogleSearch: &genai.GoogleSearch{}})
+		t := true
+		config.ToolConfig = &genai.ToolConfig{
+			IncludeServerSideToolInvocations: &t,
+		}
 	}
 
 	go func() {
@@ -96,6 +118,13 @@ func (p *Provider) Generate(ctx context.Context, params *provider.GenerateParams
 
 	if len(params.Tools) > 0 {
 		config.Tools = toTools(params.Tools)
+	}
+	if p.googleSearch {
+		config.Tools = append(config.Tools, &genai.Tool{GoogleSearch: &genai.GoogleSearch{}})
+		t := true
+		config.ToolConfig = &genai.ToolConfig{
+			IncludeServerSideToolInvocations: &t,
+		}
 	}
 
 	resp, err := p.client.Models.GenerateContent(ctx, model, contents, config)

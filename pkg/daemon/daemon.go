@@ -24,6 +24,7 @@ type Config struct {
 	APIKey        string
 	Model         string
 	TelegramToken string
+	GoogleSearch  bool
 }
 
 // Run is the main daemon loop. It manages the PID file, socket server, watchdog,
@@ -50,31 +51,27 @@ func Run(ctx context.Context, cfg Config) error {
 	wd := NewWatchdog(logger)
 
 	// --- Home directory initialization ---
-	var h *home.Home
-	if cfg.APIKey != "" {
-		globalHome, err := config.GlobalHome()
-		if err != nil {
-			return fmt.Errorf("global home: %w", err)
-		}
+	if cfg.APIKey == "" {
+		return fmt.Errorf("GEMINI_API_KEY is not set; configure it in your config file or environment")
+	}
 
-		h, err = home.New(globalHome)
-		if err != nil {
-			return fmt.Errorf("home: %w", err)
-		}
+	globalHome, err := config.GlobalHome()
+	if err != nil {
+		return fmt.Errorf("global home: %w", err)
+	}
+
+	h, err := home.New(globalHome)
+	if err != nil {
+		return fmt.Errorf("home: %w", err)
 	}
 
 	// --- Session manager initialization ---
-	var sm *SessionManager
-	if h != nil {
-		var err error
-		sm, err = initSessionManager(ctx, cfg, h, logger)
-		if err != nil {
-			logger.Warn("session manager disabled", "error", err)
-		} else {
-			srv.SetSessions(sm)
-			logger.Info("session manager ready")
-		}
+	sm, err := initSessionManager(ctx, cfg, h, logger)
+	if err != nil {
+		return fmt.Errorf("cannot start daemon: %w", err)
 	}
+	srv.SetSessions(sm)
+	logger.Info("session manager ready")
 
 	// --- Cron scheduler (declared early so status handler can access it) ---
 
@@ -127,7 +124,11 @@ func Run(ctx context.Context, cfg Config) error {
 
 	// --- Cron scheduler initialization ---
 	if h != nil {
-		p, err := gemini.New(ctx, cfg.APIKey, cfg.Model)
+		var cronOpts []gemini.Option
+		if cfg.GoogleSearch {
+			cronOpts = append(cronOpts, gemini.WithGoogleSearch())
+		}
+		p, err := gemini.New(ctx, cfg.APIKey, cfg.Model, cronOpts...)
 		if err != nil {
 			return fmt.Errorf("gemini provider: %w", err)
 		}
@@ -232,7 +233,11 @@ func Run(ctx context.Context, cfg Config) error {
 
 // initSessionManager creates the agent config and initializes the session manager.
 func initSessionManager(ctx context.Context, cfg Config, h *home.Home, _ *slog.Logger) (*SessionManager, error) {
-	p, err := gemini.New(ctx, cfg.APIKey, cfg.Model)
+	var opts []gemini.Option
+	if cfg.GoogleSearch {
+		opts = append(opts, gemini.WithGoogleSearch())
+	}
+	p, err := gemini.New(ctx, cfg.APIKey, cfg.Model, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("gemini provider: %w", err)
 	}

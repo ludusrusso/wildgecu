@@ -37,7 +37,7 @@ func Prepare(ctx context.Context, cfg Config) (*session.Config, *debug.Logger, e
 	}
 
 	if soulContent == "" {
-		return nil, dbg, fmt.Errorf("soul not found: run 'wildgecu chat' directly to bootstrap your agent first")
+		return nil, dbg, fmt.Errorf("SOUL.md not found; run 'wildgecu init' to bootstrap your agent")
 	}
 
 	memoryContent, memErr := LoadMemory(cfg.Home)
@@ -97,7 +97,7 @@ func PrepareCode(ctx context.Context, cfg Config, workDir string) (*session.Conf
 		return nil, dbg, fmt.Errorf("loading soul: %w", err)
 	}
 	if soulContent == "" {
-		return nil, dbg, fmt.Errorf("soul not found: run 'wildgecu chat' directly to bootstrap your agent first")
+		return nil, dbg, fmt.Errorf("SOUL.md not found; run 'wildgecu init' to bootstrap your agent")
 	}
 
 	memoryContent, memErr := LoadMemory(cfg.Home)

@@ -38,7 +38,7 @@ func BootstrapConfig(ctx context.Context, p provider.Provider, h *home.Home, sou
 		},
 	)
 
-	registry := tool.NewRegistry(writeSoulTool)
+	registry := tool.NewRegistry(writeSoulTool, fetchURLTool)
 
 	return &session.Config{
 		Provider:     p,

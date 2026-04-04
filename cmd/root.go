@@ -73,6 +73,7 @@ func initConfig() {
 
 	viper.SetDefault("model", "gemini-3-flash-preview")
 	viper.SetDefault("gemini_api_key", "")
+	viper.SetDefault("google_search", false)
 	viper.SetDefault("base_folder", "")
 
 	if cfgFile != "" {
