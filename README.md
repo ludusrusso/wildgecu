@@ -36,7 +36,7 @@ No database required. File-based state. One binary. Your keys, your data, your g
 WildGecu operates in three primary modes: **Bootstrap**, **Chat**, and **Code**.
 
 ```
-First run:                              Every run after:
+wildgecu init:                          wildgecu chat / code:
 
 ┌─────────────┐                         ┌─────────────┐
 │  No SOUL.md │                         │ Load SOUL.md│
@@ -66,7 +66,7 @@ First run:                              Every run after:
                                      └─────────────────┘
 ```
 
-**Bootstrap mode**: On first run, the agent receives a system prompt (`BOOTSTRAP.md`) that guides it to ask about your agent's name, purpose, personality, and expertise. After a few exchanges, it calls the `write_soul` tool to persist its identity in `.wildgecu/SOUL.md`.
+**Bootstrap mode (`wildgecu init`)**: The `init` command starts an interactive interview where the agent asks about your agent's name, purpose, personality, and expertise. The agent receives a system prompt (`BOOTSTRAP.md`) that guides the conversation. After a few exchanges, it calls the `write_soul` tool to persist its identity in `.wildgecu/SOUL.md`. If `SOUL.md` already exists, the command exits with an error — delete it first to re-initialize.
 
 **Chat mode (`wildgecu chat`)**: The default conversational mode. The system prompt is assembled from the base behavior (`AGENT.md`), the agent's identity (`SOUL.md`), and persistent memory (`MEMORY.md`).
 
@@ -90,13 +90,26 @@ export GEMINI_API_KEY="your-api-key"
 go run .
 ```
 
-On first run, the agent will start a bootstrap conversation to establish its identity. Answer a few questions and it will write `.wildgecu/SOUL.md` automatically, then switch to normal chat mode.
+Then bootstrap your agent's identity:
+
+```bash
+go run . init
+```
+
+The `init` command starts an interactive conversation where the agent asks about its name, purpose, personality, and expertise. When done, it writes `.wildgecu/SOUL.md` automatically. After that, you can start chatting:
+
+```bash
+go run .
+```
 
 ## CLI commands
 
 WildGecu is a single binary. Chat is the default command; daemon management and specialized modes are available as subcommands.
 
 ```bash
+# Bootstrap
+wildgecu init         # create SOUL.md through an interactive interview
+
 # Chat (default)
 wildgecu              # interactive chat session
 wildgecu chat         # same thing, explicit
@@ -205,7 +218,7 @@ This allows running multiple independent instances, each with its own config, so
 | `MEMORY.md` | Persistent context — curated after each session |
 | `USER.md` | Optional user preferences — create manually |
 
-Delete `SOUL.md` to re-run the bootstrap and give your agent a new identity.
+Delete `SOUL.md` and run `wildgecu init` again to give your agent a new identity.
 
 ### Config file
 
@@ -228,6 +241,7 @@ wildgecu.go                  # Entry point → cmd.Execute()
 │
 ├── cmd/                     # CLI layer (Cobra)
 │   ├── root.go              # Root command, config init, Version var
+│   ├── init.go              # init subcommand — bootstrap SOUL.md
 │   ├── chat.go              # chat subcommand (also default)
 │   ├── start.go             # start subcommand + runDaemon()
 │   ├── stop.go / restart.go # daemon lifecycle
