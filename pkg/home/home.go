@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"testing"
 
 	"wildgecu/x/file"
 )
@@ -20,16 +19,6 @@ func New(dir string) (*Home, error) {
 		return nil, fmt.Errorf("home: create dir: %w", err)
 	}
 	return &Home{dir: dir}, nil
-}
-
-// NewTmpHome returns a Home backed by a temporary directory for testing.
-func NewTmpHome(t testing.TB) *Home {
-	t.Helper()
-	h, err := New(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewTmpHome: %v", err)
-	}
-	return h
 }
 
 // Dir returns the root directory path.
