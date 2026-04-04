@@ -1,15 +1,14 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"text/tabwriter"
 
 	"wildgecu/pkg/cron"
-	"wildgecu/x/home"
 	"wildgecu/pkg/daemon"
-	"wildgecu/x/config"
 
 	"github.com/spf13/cobra"
 )
@@ -21,12 +20,12 @@ func init() {
 	rootCmd.AddCommand(cmd)
 }
 
-func cronsHome() (home.Home, error) {
-	globalHome, err := config.GlobalHome()
+func cronsDir() (string, error) {
+	h, err := newHome()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return home.New(filepath.Join(globalHome, "crons"))
+	return h.CronsDir(), nil
 }
 
 func cronCmd() *cobra.Command {
@@ -42,12 +41,12 @@ func cronLsCmd() *cobra.Command {
 		Aliases: []string{"list"},
 		Short:   "List all cron jobs",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			h, err := cronsHome()
+			dir, err := cronsDir()
 			if err != nil {
 				return err
 			}
 
-			jobs, errs := cron.LoadAll(h)
+			jobs, errs := cron.LoadAll(dir)
 			for _, e := range errs {
 				fmt.Fprintf(os.Stderr, "warning: %v\n", e)
 			}
@@ -78,13 +77,13 @@ func cronRmCmd() *cobra.Command {
 		Short: "Remove a cron job",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			h, err := cronsHome()
+			dir, err := cronsDir()
 			if err != nil {
 				return err
 			}
 
 			name := args[0]
-			if err := h.Delete(cron.Filename(name)); err != nil {
+			if err := os.Remove(filepath.Join(dir, cron.Filename(name))); err != nil && !errors.Is(err, os.ErrNotExist) {
 				return fmt.Errorf("delete cron job %q: %w", name, err)
 			}
 

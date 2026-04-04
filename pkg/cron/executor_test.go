@@ -3,10 +3,11 @@ package cron
 import (
 	"context"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
-	"wildgecu/x/home"
 	"wildgecu/pkg/provider"
 )
 
@@ -25,10 +26,10 @@ func (m *mockProvider) Generate(_ context.Context, _ *provider.GenerateParams) (
 }
 
 func TestExecute(t *testing.T) {
-	results := home.NewMem()
+	resultsDir := t.TempDir()
 	cfg := &ExecutorConfig{
 		Provider: &mockProvider{response: "Here is your summary"},
-		Results:  results,
+		Results:  resultsDir,
 		Logger:   slog.Default(),
 	}
 
@@ -40,26 +41,27 @@ func TestExecute(t *testing.T) {
 
 	Execute(context.Background(), cfg, job)
 
-	files, err := results.Search("daily-summary-*.md")
+	matches, err := filepath.Glob(filepath.Join(resultsDir, "daily-summary-*.md"))
 	if err != nil {
-		t.Fatalf("Search failed: %v", err)
+		t.Fatalf("Glob failed: %v", err)
 	}
-	if len(files) != 1 {
-		t.Fatalf("expected 1 result file, got %d", len(files))
+	if len(matches) != 1 {
+		t.Fatalf("expected 1 result file, got %d", len(matches))
 	}
 
-	data, err := results.Get(files[0])
+	data, err := os.ReadFile(matches[0])
 	if err != nil {
-		t.Fatalf("Get failed: %v", err)
+		t.Fatalf("ReadFile failed: %v", err)
 	}
 	if string(data) != "Here is your summary" {
 		t.Errorf("expected result content, got %q", data)
 	}
 
-	if !strings.HasPrefix(files[0], "daily-summary-") {
-		t.Errorf("expected filename to start with daily-summary-, got %q", files[0])
+	filename := filepath.Base(matches[0])
+	if !strings.HasPrefix(filename, "daily-summary-") {
+		t.Errorf("expected filename to start with daily-summary-, got %q", filename)
 	}
-	if !strings.HasSuffix(files[0], ".md") {
-		t.Errorf("expected filename to end with .md, got %q", files[0])
+	if !strings.HasSuffix(filename, ".md") {
+		t.Errorf("expected filename to end with .md, got %q", filename)
 	}
 }

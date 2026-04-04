@@ -3,20 +3,20 @@ package cron
 import (
 	"context"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"testing"
-
-	"wildgecu/x/home"
 )
 
-func newTestScheduler(t *testing.T, crons home.Home) *Scheduler {
+func newTestScheduler(t *testing.T, cronsDir string) *Scheduler {
 	t.Helper()
-	results := home.NewMem()
+	resultsDir := t.TempDir()
 	cfg := &ExecutorConfig{
 		Provider: &mockProvider{response: "test"},
-		Results:  results,
+		Results:  resultsDir,
 		Logger:   slog.Default(),
 	}
-	s, err := NewScheduler(crons, cfg, slog.Default())
+	s, err := NewScheduler(cronsDir, cfg, slog.Default())
 	if err != nil {
 		t.Fatalf("NewScheduler failed: %v", err)
 	}
@@ -24,11 +24,11 @@ func newTestScheduler(t *testing.T, crons home.Home) *Scheduler {
 }
 
 func TestSchedulerLoadAndStart(t *testing.T) {
-	crons := home.NewMem()
-	crons.Upsert("job1.md", []byte("---\nname: job1\ncron: \"0 9 * * *\"\n---\nprompt1"))
-	crons.Upsert("job2.md", []byte("---\nname: job2\ncron: \"0 18 * * *\"\n---\nprompt2"))
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "job1.md"), []byte("---\nname: job1\ncron: \"0 9 * * *\"\n---\nprompt1"), 0o644)
+	os.WriteFile(filepath.Join(dir, "job2.md"), []byte("---\nname: job2\ncron: \"0 18 * * *\"\n---\nprompt2"), 0o644)
 
-	s := newTestScheduler(t, crons)
+	s := newTestScheduler(t, dir)
 	defer s.Stop()
 
 	if err := s.LoadAndStart(context.Background()); err != nil {
@@ -41,10 +41,10 @@ func TestSchedulerLoadAndStart(t *testing.T) {
 }
 
 func TestSchedulerReload(t *testing.T) {
-	crons := home.NewMem()
-	crons.Upsert("job1.md", []byte("---\nname: job1\ncron: \"0 9 * * *\"\n---\nprompt1"))
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "job1.md"), []byte("---\nname: job1\ncron: \"0 9 * * *\"\n---\nprompt1"), 0o644)
 
-	s := newTestScheduler(t, crons)
+	s := newTestScheduler(t, dir)
 	defer s.Stop()
 
 	if err := s.LoadAndStart(context.Background()); err != nil {
@@ -56,7 +56,7 @@ func TestSchedulerReload(t *testing.T) {
 	}
 
 	// Add another job and reload
-	crons.Upsert("job2.md", []byte("---\nname: job2\ncron: \"0 18 * * *\"\n---\nprompt2"))
+	os.WriteFile(filepath.Join(dir, "job2.md"), []byte("---\nname: job2\ncron: \"0 18 * * *\"\n---\nprompt2"), 0o644)
 
 	if err := s.Reload(context.Background()); err != nil {
 		t.Fatalf("Reload failed: %v", err)
@@ -68,11 +68,11 @@ func TestSchedulerReload(t *testing.T) {
 }
 
 func TestSchedulerReloadRemovesDeletedJobs(t *testing.T) {
-	crons := home.NewMem()
-	crons.Upsert("job1.md", []byte("---\nname: job1\ncron: \"0 9 * * *\"\n---\nprompt1"))
-	crons.Upsert("job2.md", []byte("---\nname: job2\ncron: \"0 18 * * *\"\n---\nprompt2"))
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "job1.md"), []byte("---\nname: job1\ncron: \"0 9 * * *\"\n---\nprompt1"), 0o644)
+	os.WriteFile(filepath.Join(dir, "job2.md"), []byte("---\nname: job2\ncron: \"0 18 * * *\"\n---\nprompt2"), 0o644)
 
-	s := newTestScheduler(t, crons)
+	s := newTestScheduler(t, dir)
 	defer s.Stop()
 
 	if err := s.LoadAndStart(context.Background()); err != nil {
@@ -84,7 +84,7 @@ func TestSchedulerReloadRemovesDeletedJobs(t *testing.T) {
 	}
 
 	// Remove a job and reload
-	crons.Delete("job2.md")
+	os.Remove(filepath.Join(dir, "job2.md"))
 
 	if err := s.Reload(context.Background()); err != nil {
 		t.Fatalf("Reload failed: %v", err)
@@ -96,8 +96,8 @@ func TestSchedulerReloadRemovesDeletedJobs(t *testing.T) {
 }
 
 func TestSchedulerEmptyLoad(t *testing.T) {
-	crons := home.NewMem()
-	s := newTestScheduler(t, crons)
+	dir := t.TempDir()
+	s := newTestScheduler(t, dir)
 	defer s.Stop()
 
 	if err := s.LoadAndStart(context.Background()); err != nil {

@@ -4,16 +4,17 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"time"
 
-	"wildgecu/x/home"
 	"wildgecu/pkg/provider"
 )
 
 // ExecutorConfig holds the dependencies for executing a cron job.
 type ExecutorConfig struct {
 	Provider provider.Provider
-	Results  home.Home // ~/.wildgecu/cron-results/
+	Results  string // path to cron-results directory
 	Logger   *slog.Logger
 }
 
@@ -35,7 +36,11 @@ func Execute(ctx context.Context, cfg *ExecutorConfig, job *CronJob) {
 	ts := time.Now().UTC().Format("20060102-150405")
 	filename := fmt.Sprintf("%s-%s.md", job.Name, ts)
 
-	if err := cfg.Results.Upsert(filename, []byte(resp.Message.Content)); err != nil {
+	if err := os.MkdirAll(cfg.Results, 0o755); err != nil {
+		cfg.Logger.Error("failed to create results dir", "name", job.Name, "error", err)
+		return
+	}
+	if err := os.WriteFile(filepath.Join(cfg.Results, filename), []byte(resp.Message.Content), 0o644); err != nil {
 		cfg.Logger.Error("failed to write cron result", "name", job.Name, "error", err)
 	}
 

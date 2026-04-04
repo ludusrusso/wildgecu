@@ -1,10 +1,10 @@
 package cron
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
-
-	"wildgecu/x/home"
 )
 
 func TestParseValid(t *testing.T) {
@@ -87,18 +87,18 @@ func TestFilename(t *testing.T) {
 }
 
 func TestLoadAll(t *testing.T) {
-	h := home.NewMem()
+	dir := t.TempDir()
 
 	// Valid job
-	h.Upsert("good.md", []byte("---\nname: good\ncron: \"0 9 * * *\"\n---\nDo something"))
+	os.WriteFile(filepath.Join(dir, "good.md"), []byte("---\nname: good\ncron: \"0 9 * * *\"\n---\nDo something"), 0o644)
 
 	// Invalid job (missing schedule)
-	h.Upsert("bad.md", []byte("---\nname: bad\n---\nmissing schedule"))
+	os.WriteFile(filepath.Join(dir, "bad.md"), []byte("---\nname: bad\n---\nmissing schedule"), 0o644)
 
 	// Another valid job
-	h.Upsert("also-good.md", []byte("---\nname: also-good\ncron: \"*/5 * * * *\"\n---\nDo another thing"))
+	os.WriteFile(filepath.Join(dir, "also-good.md"), []byte("---\nname: also-good\ncron: \"*/5 * * * *\"\n---\nDo another thing"), 0o644)
 
-	jobs, errs := LoadAll(h)
+	jobs, errs := LoadAll(dir)
 
 	if len(jobs) != 2 {
 		t.Fatalf("expected 2 valid jobs, got %d", len(jobs))
@@ -112,8 +112,8 @@ func TestLoadAll(t *testing.T) {
 }
 
 func TestLoadAllEmpty(t *testing.T) {
-	h := home.NewMem()
-	jobs, errs := LoadAll(h)
+	dir := t.TempDir()
+	jobs, errs := LoadAll(dir)
 	if len(jobs) != 0 {
 		t.Errorf("expected 0 jobs, got %d", len(jobs))
 	}

@@ -3,10 +3,9 @@ package skill
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
-
-	"wildgecu/x/home"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -96,11 +95,11 @@ func SkillPath(name string) string {
 	return filepath.Join(name, SkillFile)
 }
 
-// LoadAll loads all skills from a home directory.
+// LoadAll loads all skills from a directory.
 // Each skill is expected to be a subdirectory containing a SKILL.md file.
 // It returns all successfully parsed skills and any errors encountered.
-func LoadAll(h home.Home) ([]*Skill, []error) {
-	dirs, err := h.ListDirs()
+func LoadAll(dir string) ([]*Skill, []error) {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, []error{fmt.Errorf("skill: list dirs: %w", err)}
 	}
@@ -108,15 +107,18 @@ func LoadAll(h home.Home) ([]*Skill, []error) {
 	var skills []*Skill
 	var errs []error
 
-	for _, dir := range dirs {
-		data, err := h.Get(SkillPath(dir))
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, e.Name(), SkillFile))
 		if err != nil {
 			// Skip directories without SKILL.md (not an error)
 			continue
 		}
 		s, err := Parse(data)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("skill: %s: %w", dir, err))
+			errs = append(errs, fmt.Errorf("skill: %s: %w", e.Name(), err))
 			continue
 		}
 		skills = append(skills, s)
@@ -125,11 +127,30 @@ func LoadAll(h home.Home) ([]*Skill, []error) {
 	return skills, errs
 }
 
-// Load loads a single skill by name from a home directory.
-func Load(h home.Home, name string) (*Skill, error) {
-	data, err := h.Get(SkillPath(name))
+// Load loads a single skill by name from a directory.
+func Load(dir, name string) (*Skill, error) {
+	data, err := os.ReadFile(filepath.Join(dir, name, SkillFile))
 	if err != nil {
 		return nil, fmt.Errorf("skill: load %s: %w", name, err)
 	}
 	return Parse(data)
+}
+
+// Save writes a skill to dir/<name>/SKILL.md, creating directories as needed.
+func Save(dir string, s *Skill) error {
+	data, err := Serialize(s)
+	if err != nil {
+		return err
+	}
+	skillDir := filepath.Join(dir, s.Name)
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		return fmt.Errorf("skill: create dir: %w", err)
+	}
+	return os.WriteFile(filepath.Join(skillDir, SkillFile), data, 0o644)
+}
+
+// Delete removes a skill directory. It is idempotent — no error if the skill
+// does not exist.
+func Delete(dir, name string) error {
+	return os.RemoveAll(filepath.Join(dir, name))
 }

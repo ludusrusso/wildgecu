@@ -1,11 +1,23 @@
 package skill
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
-
-	"wildgecu/x/home"
 )
+
+// writeSkill creates a skill directory with a SKILL.md file for testing.
+func writeSkill(t *testing.T, dir, name string, data []byte) {
+	t.Helper()
+	skillDir := filepath.Join(dir, name)
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, SkillFile), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestParseValid(t *testing.T) {
 	data := []byte("---\nname: go-errors\ndescription: \"Go error handling\"\ntags:\n  - go\n  - errors\n---\n## Best Practices\nWrap errors.")
@@ -120,13 +132,12 @@ func TestSkillPath(t *testing.T) {
 }
 
 func TestLoadAll(t *testing.T) {
-	h := home.NewMem()
+	dir := t.TempDir()
+	writeSkill(t, dir, "good", []byte("---\nname: good\ndescription: A good skill\n---\nGood content"))
+	writeSkill(t, dir, "bad", []byte("---\nname: bad\n---\nmissing description"))
+	writeSkill(t, dir, "also-good", []byte("---\nname: also-good\ndescription: Another good skill\ntags:\n  - test\n---\nMore content"))
 
-	h.Upsert("good/SKILL.md", []byte("---\nname: good\ndescription: A good skill\n---\nGood content"))
-	h.Upsert("bad/SKILL.md", []byte("---\nname: bad\n---\nmissing description"))
-	h.Upsert("also-good/SKILL.md", []byte("---\nname: also-good\ndescription: Another good skill\ntags:\n  - test\n---\nMore content"))
-
-	skills, errs := LoadAll(h)
+	skills, errs := LoadAll(dir)
 
 	if len(skills) != 2 {
 		t.Fatalf("expected 2 valid skills, got %d", len(skills))
@@ -140,12 +151,12 @@ func TestLoadAll(t *testing.T) {
 }
 
 func TestLoadAllSkipsDirsWithoutSkillMD(t *testing.T) {
-	h := home.NewMem()
+	dir := t.TempDir()
+	writeSkill(t, dir, "valid", []byte("---\nname: valid\ndescription: Valid skill\n---\nContent"))
+	os.MkdirAll(filepath.Join(dir, "noskill"), 0o755)
+	os.WriteFile(filepath.Join(dir, "noskill", "other.txt"), []byte("not a skill"), 0o644)
 
-	h.Upsert("valid/SKILL.md", []byte("---\nname: valid\ndescription: Valid skill\n---\nContent"))
-	h.Upsert("noskill/other.txt", []byte("not a skill"))
-
-	skills, errs := LoadAll(h)
+	skills, errs := LoadAll(dir)
 
 	if len(skills) != 1 {
 		t.Fatalf("expected 1 skill, got %d", len(skills))
@@ -159,8 +170,8 @@ func TestLoadAllSkipsDirsWithoutSkillMD(t *testing.T) {
 }
 
 func TestLoadAllEmpty(t *testing.T) {
-	h := home.NewMem()
-	skills, errs := LoadAll(h)
+	dir := t.TempDir()
+	skills, errs := LoadAll(dir)
 	if len(skills) != 0 {
 		t.Errorf("expected 0 skills, got %d", len(skills))
 	}
@@ -170,10 +181,10 @@ func TestLoadAllEmpty(t *testing.T) {
 }
 
 func TestLoad(t *testing.T) {
-	h := home.NewMem()
-	h.Upsert("my-skill/SKILL.md", []byte("---\nname: my-skill\ndescription: Test skill\n---\nContent here"))
+	dir := t.TempDir()
+	writeSkill(t, dir, "my-skill", []byte("---\nname: my-skill\ndescription: Test skill\n---\nContent here"))
 
-	s, err := Load(h, "my-skill")
+	s, err := Load(dir, "my-skill")
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
@@ -183,9 +194,87 @@ func TestLoad(t *testing.T) {
 }
 
 func TestLoadNotFound(t *testing.T) {
-	h := home.NewMem()
-	_, err := Load(h, "nonexistent")
+	dir := t.TempDir()
+	_, err := Load(dir, "nonexistent")
 	if err == nil {
 		t.Fatal("expected error for nonexistent skill")
+	}
+}
+
+func TestSave(t *testing.T) {
+	dir := t.TempDir()
+	s := &Skill{
+		Name:        "new-skill",
+		Description: "A new skill",
+		Tags:        []string{"test"},
+		Content:     "Content here",
+	}
+
+	if err := Save(dir, s); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	// Verify file was written correctly
+	data, err := os.ReadFile(filepath.Join(dir, "new-skill", SkillFile))
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
+
+	parsed, err := Parse(data)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if parsed.Name != "new-skill" {
+		t.Errorf("expected name new-skill, got %q", parsed.Name)
+	}
+	if parsed.Description != "A new skill" {
+		t.Errorf("expected description 'A new skill', got %q", parsed.Description)
+	}
+}
+
+func TestSaveOverwrite(t *testing.T) {
+	dir := t.TempDir()
+	s := &Skill{
+		Name:        "overwrite",
+		Description: "Original",
+		Content:     "Original content",
+	}
+	if err := Save(dir, s); err != nil {
+		t.Fatalf("first Save failed: %v", err)
+	}
+
+	s.Description = "Updated"
+	s.Content = "Updated content"
+	if err := Save(dir, s); err != nil {
+		t.Fatalf("second Save failed: %v", err)
+	}
+
+	loaded, err := Load(dir, "overwrite")
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if loaded.Description != "Updated" {
+		t.Errorf("expected updated description, got %q", loaded.Description)
+	}
+}
+
+func TestDelete(t *testing.T) {
+	dir := t.TempDir()
+	writeSkill(t, dir, "to-delete", []byte("---\nname: to-delete\ndescription: Delete me\n---\nContent"))
+
+	if err := Delete(dir, "to-delete"); err != nil {
+		t.Fatalf("Delete failed: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, "to-delete")); !os.IsNotExist(err) {
+		t.Error("expected directory to be deleted")
+	}
+}
+
+func TestDeleteIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	// Deleting a non-existent skill should not error
+	if err := Delete(dir, "nonexistent"); err != nil {
+		t.Fatalf("Delete of nonexistent skill should not error, got: %v", err)
 	}
 }

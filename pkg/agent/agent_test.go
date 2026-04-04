@@ -5,15 +5,17 @@ import (
 	"errors"
 	"testing"
 
-	"wildgecu/x/home"
+	"wildgecu/pkg/home"
 	"wildgecu/pkg/provider"
 )
 
 // --- LoadSoul ---
 
 func TestLoadSoul_Exists(t *testing.T) {
-	h := home.NewMem()
-	h.Files["SOUL.md"] = []byte("I am a helpful agent.")
+	h := home.NewTmpHome(t)
+	if err := h.Soul().Write("I am a helpful agent."); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
 
 	content, err := LoadSoul(h)
 	if err != nil {
@@ -25,18 +27,50 @@ func TestLoadSoul_Exists(t *testing.T) {
 }
 
 func TestLoadSoul_NotExists(t *testing.T) {
-	h := home.NewMem()
+	h := home.NewTmpHome(t)
 
-	_, err := LoadSoul(h)
-	if !errors.Is(err, home.ErrNotFound) {
-		t.Fatalf("got %v, want home.ErrNotFound", err)
+	content, err := LoadSoul(h)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if content != "" {
+		t.Fatalf("got %q, want empty string", content)
+	}
+}
+
+// --- LoadMemory ---
+
+func TestLoadMemory_Exists(t *testing.T) {
+	h := home.NewTmpHome(t)
+	if err := h.Memory().Write("some memory"); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	content, err := LoadMemory(h)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if content != "some memory" {
+		t.Fatalf("got %q, want %q", content, "some memory")
+	}
+}
+
+func TestLoadMemory_NotExists(t *testing.T) {
+	h := home.NewTmpHome(t)
+
+	content, err := LoadMemory(h)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if content != "" {
+		t.Fatalf("got %q, want empty string", content)
 	}
 }
 
 // --- BootstrapConfig ---
 
 func TestBootstrapConfig_WritesSoul(t *testing.T) {
-	h := home.NewMem()
+	h := home.NewTmpHome(t)
 	var soulContent string
 
 	cfg := BootstrapConfig(context.Background(), nil, h, &soulContent)
@@ -57,17 +91,17 @@ func TestBootstrapConfig_WritesSoul(t *testing.T) {
 	if soulContent != "My soul content" {
 		t.Fatalf("soulContent = %q, want %q", soulContent, "My soul content")
 	}
-	data, err := h.Get("SOUL.md")
+	data, err := h.Soul().Get()
 	if err != nil {
 		t.Fatalf("SOUL.md not persisted: %v", err)
 	}
-	if string(data) != "My soul content" {
-		t.Fatalf("persisted content = %q, want %q", string(data), "My soul content")
+	if data != "My soul content" {
+		t.Fatalf("persisted content = %q, want %q", data, "My soul content")
 	}
 }
 
 func TestBootstrapConfig_EmptyContent(t *testing.T) {
-	h := home.NewMem()
+	h := home.NewTmpHome(t)
 	var soulContent string
 
 	cfg := BootstrapConfig(context.Background(), nil, h, &soulContent)
@@ -85,7 +119,7 @@ func TestBootstrapConfig_EmptyContent(t *testing.T) {
 }
 
 func TestBootstrapConfig_UnknownTool(t *testing.T) {
-	h := home.NewMem()
+	h := home.NewTmpHome(t)
 	var soulContent string
 
 	cfg := BootstrapConfig(context.Background(), nil, h, &soulContent)
@@ -108,7 +142,7 @@ func TestBootstrapConfig_UnknownTool(t *testing.T) {
 // --- BuildSystemPrompt ---
 
 func TestBuildSystemPrompt_WithSoul(t *testing.T) {
-	ws := home.NewMem()
+	ws := home.NewTmpHome(t)
 
 	prompt := BuildSystemPrompt(ws, "I am a test soul.", "")
 	if !contains(prompt, "# Agent Soul") {
@@ -120,8 +154,10 @@ func TestBuildSystemPrompt_WithSoul(t *testing.T) {
 }
 
 func TestBuildSystemPrompt_WithUserPrefs(t *testing.T) {
-	ws := home.NewMem()
-	ws.Files["USER.md"] = []byte("Prefer Go.")
+	ws := home.NewTmpHome(t)
+	if err := ws.User().Write("Prefer Go."); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
 
 	prompt := BuildSystemPrompt(ws, "soul", "")
 	if !contains(prompt, "# User Preferences") {
@@ -133,11 +169,18 @@ func TestBuildSystemPrompt_WithUserPrefs(t *testing.T) {
 }
 
 func TestBuildSystemPrompt_NoUserPrefs(t *testing.T) {
-	ws := home.NewMem()
+	ws := home.NewTmpHome(t)
 
 	prompt := BuildSystemPrompt(ws, "soul", "")
 	if contains(prompt, "# User Preferences") {
 		t.Fatal("did not expect user preferences section in prompt")
+	}
+}
+
+func TestBuildSystemPrompt_NilWorkspace(t *testing.T) {
+	prompt := BuildSystemPrompt(nil, "soul", "")
+	if contains(prompt, "# User Preferences") {
+		t.Fatal("did not expect user preferences section with nil workspace")
 	}
 }
 

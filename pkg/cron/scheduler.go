@@ -7,22 +7,20 @@ import (
 	"sync"
 	"time"
 
-	"wildgecu/x/home"
-
 	"github.com/go-co-op/gocron/v2"
 )
 
 // Scheduler manages cron jobs using gocron.
 type Scheduler struct {
 	scheduler gocron.Scheduler
-	crons     home.Home
+	crons     string // path to crons directory
 	execCfg   *ExecutorConfig
 	logger    *slog.Logger
 	mu        sync.Mutex
 }
 
 // NewScheduler creates a new cron scheduler.
-func NewScheduler(crons home.Home, execCfg *ExecutorConfig, logger *slog.Logger) (*Scheduler, error) {
+func NewScheduler(crons string, execCfg *ExecutorConfig, logger *slog.Logger) (*Scheduler, error) {
 	s, err := gocron.NewScheduler(gocron.WithLocation(time.UTC))
 	if err != nil {
 		return nil, fmt.Errorf("cron: create scheduler: %w", err)

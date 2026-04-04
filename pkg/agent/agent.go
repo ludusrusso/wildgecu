@@ -2,23 +2,21 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
-	"wildgecu/x/debug"
-	"wildgecu/x/home"
+	"wildgecu/pkg/home"
 	"wildgecu/pkg/provider"
 	"wildgecu/pkg/provider/tool"
 	"wildgecu/pkg/session"
+	"wildgecu/x/debug"
 )
 
 // Config holds the configuration needed to run the agent.
 type Config struct {
 	Provider  provider.Provider
-	Home      home.Home
-	Workspace home.Home
-	HomeDir   string // absolute path to ~/.wildgecu, used as bash tool working directory
+	Home      *home.Home
+	Workspace *home.Home
 	Debug     bool
 }
 
@@ -34,24 +32,21 @@ func Prepare(ctx context.Context, cfg Config) (*session.Config, *debug.Logger, e
 	}
 
 	soulContent, err := LoadSoul(cfg.Home)
-	if err != nil && !errors.Is(err, home.ErrNotFound) {
+	if err != nil {
 		return nil, dbg, fmt.Errorf("loading soul: %w", err)
 	}
 
-	memoryContent, memErr := LoadMemory(cfg.Home)
-	if memErr != nil && !errors.Is(memErr, home.ErrNotFound) {
-		return nil, dbg, fmt.Errorf("loading memory: %w", memErr)
-	}
-
-	if errors.Is(err, home.ErrNotFound) {
-		// Bootstrap needs to run in the old direct way.
-		// For now, skip bootstrap when running under daemon.
-		// The daemon requires a pre-existing soul.
+	if soulContent == "" {
 		return nil, dbg, fmt.Errorf("soul not found: run 'wildgecu chat' directly to bootstrap your agent first")
 	}
 
-	skillsHome, _ := cfg.Home.Sub("skills")
-	tools := loadTools(skillsHome, cfg.HomeDir)
+	memoryContent, memErr := LoadMemory(cfg.Home)
+	if memErr != nil {
+		return nil, dbg, fmt.Errorf("loading memory: %w", memErr)
+	}
+
+	skillsDir := cfg.Home.SkillsDir()
+	tools := loadTools(skillsDir, cfg.Home.Dir())
 	systemPrompt := BuildSystemPrompt(cfg.Workspace, soulContent, memoryContent)
 	if dbg != nil {
 		dbg.SystemPrompt(systemPrompt)
@@ -76,7 +71,7 @@ func Finalize(ctx context.Context, cfg Config, messages []provider.Message) erro
 	}
 
 	memoryContent, err := LoadMemory(cfg.Home)
-	if err != nil && !errors.Is(err, home.ErrNotFound) {
+	if err != nil {
 		return err
 	}
 
@@ -98,20 +93,20 @@ func PrepareCode(ctx context.Context, cfg Config, workDir string) (*session.Conf
 	}
 
 	soulContent, err := LoadSoul(cfg.Home)
-	if err != nil && !errors.Is(err, home.ErrNotFound) {
+	if err != nil {
 		return nil, dbg, fmt.Errorf("loading soul: %w", err)
 	}
-	if errors.Is(err, home.ErrNotFound) {
+	if soulContent == "" {
 		return nil, dbg, fmt.Errorf("soul not found: run 'wildgecu chat' directly to bootstrap your agent first")
 	}
 
 	memoryContent, memErr := LoadMemory(cfg.Home)
-	if memErr != nil && !errors.Is(memErr, home.ErrNotFound) {
+	if memErr != nil {
 		return nil, dbg, fmt.Errorf("loading memory: %w", memErr)
 	}
 
-	skillsHome, _ := cfg.Home.Sub("skills")
-	tools := loadCodeTools(skillsHome, workDir)
+	skillsDir := cfg.Home.SkillsDir()
+	tools := loadCodeTools(skillsDir, workDir)
 	systemPrompt := BuildCodeSystemPrompt(cfg.Workspace, soulContent, memoryContent, workDir)
 	if dbg != nil {
 		dbg.SystemPrompt(systemPrompt)
@@ -129,15 +124,15 @@ func PrepareCode(ctx context.Context, cfg Config, workDir string) (*session.Conf
 	return codeCfg, dbg, nil
 }
 
-func loadTools(h home.Home, homeDir string) *tool.Registry {
+func loadTools(skillsDir, homeDir string) *tool.Registry {
 	tools := []tool.Tool{getCurrentTimeTool, newBashTool(homeDir), newNodeTool(homeDir)}
-	if h != nil {
-		tools = append(tools, newLoadSkillTool(h))
+	if skillsDir != "" {
+		tools = append(tools, newLoadSkillTool(skillsDir))
 	}
 	return tool.NewRegistry(tools...)
 }
 
-func loadCodeTools(skillsHome home.Home, workDir string) *tool.Registry {
+func loadCodeTools(skillsDir, workDir string) *tool.Registry {
 	tools := []tool.Tool{
 		getCurrentTimeTool,
 		newBashTool(workDir),
@@ -147,8 +142,8 @@ func loadCodeTools(skillsHome home.Home, workDir string) *tool.Registry {
 		newWriteFileTool(workDir),
 		newUpdateFileTool(workDir),
 	}
-	if skillsHome != nil {
-		tools = append(tools, newLoadSkillTool(skillsHome))
+	if skillsDir != "" {
+		tools = append(tools, newLoadSkillTool(skillsDir))
 	}
 	return tool.NewRegistry(tools...)
 }

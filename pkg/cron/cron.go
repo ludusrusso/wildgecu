@@ -3,9 +3,9 @@ package cron
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
-
-	"wildgecu/x/home"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -86,10 +86,10 @@ func Filename(name string) string {
 	return name + ".md"
 }
 
-// LoadAll loads all cron jobs from a home directory.
+// LoadAll loads all cron jobs from a directory path.
 // It returns all successfully parsed jobs and any errors encountered.
-func LoadAll(h home.Home) ([]*CronJob, []error) {
-	files, err := h.Search("*.md")
+func LoadAll(dir string) ([]*CronJob, []error) {
+	matches, err := filepath.Glob(filepath.Join(dir, "*.md"))
 	if err != nil {
 		return nil, []error{fmt.Errorf("cron: search: %w", err)}
 	}
@@ -97,8 +97,9 @@ func LoadAll(h home.Home) ([]*CronJob, []error) {
 	var jobs []*CronJob
 	var errs []error
 
-	for _, f := range files {
-		data, err := h.Get(f)
+	for _, path := range matches {
+		f := filepath.Base(path)
+		data, err := os.ReadFile(path)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("cron: read %s: %w", f, err))
 			continue

@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"wildgecu/pkg/cron"
@@ -169,7 +170,7 @@ type saveResultMsg struct{ err error }
 
 func (m cronAddModel) save() tea.Cmd {
 	return func() tea.Msg {
-		h, err := cronsHome()
+		dir, err := cronsDir()
 		if err != nil {
 			return saveResultMsg{err: err}
 		}
@@ -185,7 +186,10 @@ func (m cronAddModel) save() tea.Cmd {
 			return saveResultMsg{err: err}
 		}
 
-		if err := h.Upsert(cron.Filename(job.Name), data); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return saveResultMsg{err: err}
+		}
+		if err := os.WriteFile(filepath.Join(dir, cron.Filename(job.Name)), data, 0o644); err != nil {
 			return saveResultMsg{err: err}
 		}
 

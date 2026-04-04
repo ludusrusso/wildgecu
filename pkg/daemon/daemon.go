@@ -6,14 +6,13 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
 
 	"wildgecu/pkg/agent"
 	"wildgecu/pkg/cron"
-	"wildgecu/x/home"
+	"wildgecu/pkg/home"
 	"wildgecu/pkg/provider/gemini"
 	"wildgecu/x/config"
 	"wildgecu/pkg/chat/telegram"
@@ -50,11 +49,25 @@ func Run(ctx context.Context, cfg Config) error {
 	startTime := time.Now()
 	wd := NewWatchdog(logger)
 
+	// --- Home directory initialization ---
+	var h *home.Home
+	if cfg.APIKey != "" {
+		globalHome, err := config.GlobalHome()
+		if err != nil {
+			return fmt.Errorf("global home: %w", err)
+		}
+
+		h, err = home.New(globalHome)
+		if err != nil {
+			return fmt.Errorf("home: %w", err)
+		}
+	}
+
 	// --- Session manager initialization ---
 	var sm *SessionManager
-	if cfg.APIKey != "" {
+	if h != nil {
 		var err error
-		sm, err = initSessionManager(ctx, cfg, logger)
+		sm, err = initSessionManager(ctx, cfg, h, logger)
 		if err != nil {
 			logger.Warn("session manager disabled", "error", err)
 		} else {
@@ -113,22 +126,7 @@ func Run(ctx context.Context, cfg Config) error {
 	})
 
 	// --- Cron scheduler initialization ---
-	if cfg.APIKey != "" {
-		globalHome, err := config.GlobalHome()
-		if err != nil {
-			return fmt.Errorf("global home: %w", err)
-		}
-
-		cronsHome, err := home.New(filepath.Join(globalHome, "crons"))
-		if err != nil {
-			return fmt.Errorf("crons home: %w", err)
-		}
-
-		resultsHome, err := home.New(filepath.Join(globalHome, "cron-results"))
-		if err != nil {
-			return fmt.Errorf("cron-results home: %w", err)
-		}
-
+	if h != nil {
 		p, err := gemini.New(ctx, cfg.APIKey, cfg.Model)
 		if err != nil {
 			return fmt.Errorf("gemini provider: %w", err)
@@ -136,11 +134,11 @@ func Run(ctx context.Context, cfg Config) error {
 
 		execCfg := &cron.ExecutorConfig{
 			Provider: p,
-			Results:  resultsHome,
+			Results:  h.CronResultsDir(),
 			Logger:   logger,
 		}
 
-		scheduler, err = cron.NewScheduler(cronsHome, execCfg, logger)
+		scheduler, err = cron.NewScheduler(h.CronsDir(), execCfg, logger)
 		if err != nil {
 			return fmt.Errorf("cron scheduler: %w", err)
 		}
@@ -233,17 +231,7 @@ func Run(ctx context.Context, cfg Config) error {
 }
 
 // initSessionManager creates the agent config and initializes the session manager.
-func initSessionManager(ctx context.Context, cfg Config, _ *slog.Logger) (*SessionManager, error) {
-	globalHome, err := config.GlobalHome()
-	if err != nil {
-		return nil, fmt.Errorf("global home: %w", err)
-	}
-
-	homeFS, err := home.New(globalHome)
-	if err != nil {
-		return nil, fmt.Errorf("home: %w", err)
-	}
-
+func initSessionManager(ctx context.Context, cfg Config, h *home.Home, _ *slog.Logger) (*SessionManager, error) {
 	p, err := gemini.New(ctx, cfg.APIKey, cfg.Model)
 	if err != nil {
 		return nil, fmt.Errorf("gemini provider: %w", err)
@@ -251,9 +239,8 @@ func initSessionManager(ctx context.Context, cfg Config, _ *slog.Logger) (*Sessi
 
 	agentCfg := agent.Config{
 		Provider:  p,
-		Home:      homeFS,
-		Workspace: homeFS, // daemon uses global home as workspace
-		HomeDir:   globalHome,
+		Home:      h,
+		Workspace: h, // daemon uses global home as workspace
 	}
 
 	return NewSessionManager(ctx, agentCfg)
