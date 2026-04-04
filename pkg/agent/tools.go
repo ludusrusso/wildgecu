@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"wildgecu/x/home"
 	"wildgecu/pkg/provider/tool"
 	"wildgecu/pkg/skill"
 )
@@ -60,12 +59,12 @@ type SkillSummary struct {
 	Tags        []string `json:"tags,omitempty"`
 }
 
-func newLoadSkillTool(skillsHome home.Home) tool.Tool {
+func newLoadSkillTool(skillsDir string) tool.Tool {
 	return tool.NewTool("load_skill", "List and load domain-specific skills. Use action='list' to see available skills, action='load' with name to load a specific skill's content.",
 		func(ctx context.Context, in LoadSkillInput) (LoadSkillOutput, error) {
 			switch in.Action {
 			case "list":
-				skills, _ := skill.LoadAll(skillsHome)
+				skills, _ := skill.LoadAll(skillsDir)
 				summaries := make([]SkillSummary, 0, len(skills))
 				for _, s := range skills {
 					summaries = append(summaries, SkillSummary{
@@ -80,7 +79,7 @@ func newLoadSkillTool(skillsHome home.Home) tool.Tool {
 				if strings.TrimSpace(in.Name) == "" {
 					return LoadSkillOutput{}, fmt.Errorf("name is required when action is 'load'")
 				}
-				s, err := skill.Load(skillsHome, in.Name)
+				s, err := skill.Load(skillsDir, in.Name)
 				if err != nil {
 					return LoadSkillOutput{}, fmt.Errorf("loading skill %q: %w", in.Name, err)
 				}

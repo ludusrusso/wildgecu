@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"wildgecu/x/debug"
@@ -50,8 +51,8 @@ func Prepare(ctx context.Context, cfg Config) (*session.Config, *debug.Logger, e
 		return nil, dbg, fmt.Errorf("soul not found: run 'wildgecu chat' directly to bootstrap your agent first")
 	}
 
-	skillsHome, _ := cfg.Home.Sub("skills")
-	tools := loadTools(skillsHome, cfg.HomeDir)
+	skillsDir := filepath.Join(cfg.HomeDir, "skills")
+	tools := loadTools(skillsDir, cfg.HomeDir)
 	systemPrompt := BuildSystemPrompt(cfg.Workspace, soulContent, memoryContent)
 	if dbg != nil {
 		dbg.SystemPrompt(systemPrompt)
@@ -110,8 +111,8 @@ func PrepareCode(ctx context.Context, cfg Config, workDir string) (*session.Conf
 		return nil, dbg, fmt.Errorf("loading memory: %w", memErr)
 	}
 
-	skillsHome, _ := cfg.Home.Sub("skills")
-	tools := loadCodeTools(skillsHome, workDir)
+	skillsDir := filepath.Join(cfg.HomeDir, "skills")
+	tools := loadCodeTools(skillsDir, workDir)
 	systemPrompt := BuildCodeSystemPrompt(cfg.Workspace, soulContent, memoryContent, workDir)
 	if dbg != nil {
 		dbg.SystemPrompt(systemPrompt)
@@ -129,15 +130,15 @@ func PrepareCode(ctx context.Context, cfg Config, workDir string) (*session.Conf
 	return codeCfg, dbg, nil
 }
 
-func loadTools(h home.Home, homeDir string) *tool.Registry {
+func loadTools(skillsDir string, homeDir string) *tool.Registry {
 	tools := []tool.Tool{getCurrentTimeTool, newBashTool(homeDir), newNodeTool(homeDir)}
-	if h != nil {
-		tools = append(tools, newLoadSkillTool(h))
+	if skillsDir != "" {
+		tools = append(tools, newLoadSkillTool(skillsDir))
 	}
 	return tool.NewRegistry(tools...)
 }
 
-func loadCodeTools(skillsHome home.Home, workDir string) *tool.Registry {
+func loadCodeTools(skillsDir string, workDir string) *tool.Registry {
 	tools := []tool.Tool{
 		getCurrentTimeTool,
 		newBashTool(workDir),
@@ -147,8 +148,8 @@ func loadCodeTools(skillsHome home.Home, workDir string) *tool.Registry {
 		newWriteFileTool(workDir),
 		newUpdateFileTool(workDir),
 	}
-	if skillsHome != nil {
-		tools = append(tools, newLoadSkillTool(skillsHome))
+	if skillsDir != "" {
+		tools = append(tools, newLoadSkillTool(skillsDir))
 	}
 	return tool.NewRegistry(tools...)
 }

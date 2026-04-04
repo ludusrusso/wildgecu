@@ -188,7 +188,7 @@ func (m skillAddModel) parseTags() []string {
 
 func (m skillAddModel) save() tea.Cmd {
 	return func() tea.Msg {
-		h, err := skillsHome()
+		dir, err := skillsDir()
 		if err != nil {
 			return skillSaveResultMsg{err: err}
 		}
@@ -200,12 +200,7 @@ func (m skillAddModel) save() tea.Cmd {
 			Content:     strings.TrimSpace(m.content.Value()),
 		}
 
-		data, err := skill.Serialize(s)
-		if err != nil {
-			return skillSaveResultMsg{err: err}
-		}
-
-		if err := h.Upsert(skill.SkillPath(s.Name), data); err != nil {
+		if err := skill.Save(dir, s); err != nil {
 			return skillSaveResultMsg{err: err}
 		}
 

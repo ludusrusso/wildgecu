@@ -3,10 +3,10 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 
-	"wildgecu/x/home"
 	"wildgecu/pkg/skill"
 	"wildgecu/x/config"
 
@@ -20,16 +20,16 @@ func init() {
 	rootCmd.AddCommand(cmd)
 }
 
-func skillsHome() (home.Home, error) {
+func skillsDir() (string, error) {
 	globalHome, err := config.GlobalHome()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	h, err := home.New(globalHome)
-	if err != nil {
-		return nil, err
+	dir := filepath.Join(globalHome, "skills")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
 	}
-	return h.Sub("skills")
+	return dir, nil
 }
 
 func skillCmd() *cobra.Command {
@@ -45,12 +45,12 @@ func skillLsCmd() *cobra.Command {
 		Aliases: []string{"list"},
 		Short:   "List all skills",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			h, err := skillsHome()
+			dir, err := skillsDir()
 			if err != nil {
 				return err
 			}
 
-			skills, errs := skill.LoadAll(h)
+			skills, errs := skill.LoadAll(dir)
 			for _, e := range errs {
 				fmt.Fprintf(os.Stderr, "warning: %v\n", e)
 			}
@@ -82,13 +82,13 @@ func skillRmCmd() *cobra.Command {
 		Short: "Remove a skill",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			h, err := skillsHome()
+			dir, err := skillsDir()
 			if err != nil {
 				return err
 			}
 
 			name := args[0]
-			if err := h.DeleteDir(name); err != nil {
+			if err := skill.Delete(dir, name); err != nil {
 				return fmt.Errorf("delete skill %q: %w", name, err)
 			}
 
