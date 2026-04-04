@@ -19,7 +19,7 @@ That's the idea behind WildGecu. An AI agent framework that attaches to any surf
 
 WildGecu is a modular AI agent framework in Go. It provides a reusable foundation for building autonomous agents with:
 
-- **Multi-provider support** — LLM-agnostic design behind a clean `Provider` interface (ships with Google Gemini; Anthropic, OpenAI, Ollama next)
+- **Multi-provider support** — LLM-agnostic design behind a clean `Provider` interface (ships with Google Gemini, OpenAI, and Ollama)
 - **Soul** — persistent identity bootstrapped through a conversational interview, stored as Markdown
 - **Memory** — persistent context across sessions with automatic curation after each conversation
 - **Skills** — a plugin system with lazy-loaded Markdown-based definitions and YAML frontmatter
@@ -77,17 +77,38 @@ wildgecu init:                          wildgecu chat / code:
 ## Prerequisites
 
 - Go 1.26+
-- A [Google Gemini API key](https://aistudio.google.com/apikey)
+- At least one LLM provider configured:
+  - [Google Gemini API key](https://aistudio.google.com/apikey) (default)
+  - [OpenAI API key](https://platform.openai.com/api-keys)
+  - [Ollama](https://ollama.com/) running locally (no API key needed)
 
 ## Getting started
 
 ```bash
 git clone https://github.com/ludusrusso/wildgecu.git
 cd wildgecu
+```
 
+### With Gemini (default)
+
+```bash
 export GEMINI_API_KEY="your-api-key"
-
 go run .
+```
+
+### With OpenAI
+
+```bash
+export WILDGECU_PROVIDER=openai
+export OPENAI_API_KEY="your-api-key"
+go run . --model gpt-4o
+```
+
+### With Ollama
+
+```bash
+export WILDGECU_PROVIDER=ollama
+go run . --model llama3
 ```
 
 Then bootstrap your agent's identity:
@@ -202,7 +223,7 @@ This allows running multiple independent instances, each with its own config, so
 
 | File / Directory | Purpose |
 | --- | --- |
-| `wildgecu.yaml` | Configuration (API key, model) — created on first run |
+| `wildgecu.yaml` | Configuration (provider, API keys, model) — created on first run |
 | `wildgecu.pid` | Daemon PID file |
 | `wildgecu.sock` | Daemon Unix domain socket |
 | `wildgecu.log` | Daemon log file (JSON) |
@@ -231,7 +252,15 @@ wildgecu --config /path/to/config.yaml
 Environment variables also work:
 
 ```bash
+# Provider selection (default: gemini)
+export WILDGECU_PROVIDER="gemini"   # or "openai" or "ollama"
+
+# API keys (set the one matching your provider)
 export GEMINI_API_KEY="your-key"
+export OPENAI_API_KEY="your-key"
+
+# Ollama settings (no API key needed)
+export OLLAMA_BASE_URL="http://localhost:11434/v1"  # default
 ```
 
 ## Architecture
@@ -265,9 +294,11 @@ wildgecu.go                  # Entry point → cmd.Execute()
 │   │
 │   ├── provider/            # LLM provider abstraction
 │   │   ├── provider.go      # Provider interface, types
+│   │   ├── factory/          # Provider factory (factory.New)
 │   │   ├── agent.go         # RunAgentLoop / RunAgentLoopStream
 │   │   ├── tool/            # Type-safe tool system (Tool, Registry, Executor)
-│   │   └── gemini/          # Google Gemini implementation
+│   │   ├── gemini/          # Google Gemini implementation
+│   │   └── openai/          # OpenAI / Ollama implementation
 │   │
 │   ├── session/             # Conversation management
 │   │   └── session.go       # RunTurn, RunTurnStream, callbacks
@@ -312,9 +343,21 @@ wildgecu.go                  # Entry point → cmd.Execute()
 - **Home abstraction** — File operations are abstracted behind an interface (`FSHome` for disk, `MemHome` for tests), keeping the agent logic testable.
 - **Parallel tool calling** — Independent tool calls within a single agent turn are executed concurrently for lower latency.
 
-## Adding a new provider
+## Providers
 
-Implement the `provider.Provider` interface:
+WildGecu ships with three providers:
+
+| Provider | Package | Streaming | Tool Calling | API Key Required |
+|----------|---------|-----------|--------------|------------------|
+| Google Gemini | `pkg/provider/gemini` | Yes | Yes | Yes |
+| OpenAI | `pkg/provider/openai` | Yes | Yes | Yes |
+| Ollama | `pkg/provider/openai` (shared) | Yes | Model-dependent | No |
+
+Ollama uses the same OpenAI-compatible implementation with a custom base URL.
+
+### Adding a new provider
+
+1. Implement the `provider.Provider` interface:
 
 ```go
 type Provider interface {
@@ -322,7 +365,7 @@ type Provider interface {
 }
 ```
 
-For streaming support, also implement `StreamProvider`:
+2. For streaming support, also implement `StreamProvider`:
 
 ```go
 type StreamProvider interface {
@@ -331,7 +374,7 @@ type StreamProvider interface {
 }
 ```
 
-Then wire it up in `cmd/chat.go` alongside the Gemini provider.
+3. Register it in the factory at `pkg/provider/factory/factory.go`.
 
 ## License
 

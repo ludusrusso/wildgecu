@@ -11,20 +11,22 @@ import (
 	"time"
 
 	"wildgecu/pkg/agent"
+	"wildgecu/pkg/chat/telegram"
 	"wildgecu/pkg/cron"
 	"wildgecu/pkg/home"
-	"wildgecu/pkg/provider/gemini"
+	"wildgecu/pkg/provider/factory"
 	"wildgecu/x/config"
-	"wildgecu/pkg/chat/telegram"
 )
 
 // Config holds daemon configuration.
 type Config struct {
 	Version       string
+	Provider      string // "gemini", "openai", or "ollama"
 	APIKey        string
 	Model         string
 	TelegramToken string
 	GoogleSearch  bool
+	OllamaURL     string
 }
 
 // Run is the main daemon loop. It manages the PID file, socket server, watchdog,
@@ -51,8 +53,8 @@ func Run(ctx context.Context, cfg Config) error {
 	wd := NewWatchdog(logger)
 
 	// --- Home directory initialization ---
-	if cfg.APIKey == "" {
-		return fmt.Errorf("GEMINI_API_KEY is not set; configure it in your config file or environment")
+	if cfg.APIKey == "" && cfg.Provider != "ollama" {
+		return fmt.Errorf("API key not set for provider %q; configure it in your config file or environment", cfg.Provider)
 	}
 
 	globalHome, err := config.GlobalHome()
@@ -124,13 +126,9 @@ func Run(ctx context.Context, cfg Config) error {
 
 	// --- Cron scheduler initialization ---
 	if h != nil {
-		var cronOpts []gemini.Option
-		if cfg.GoogleSearch {
-			cronOpts = append(cronOpts, gemini.WithGoogleSearch())
-		}
-		p, err := gemini.New(ctx, cfg.APIKey, cfg.Model, cronOpts...)
+		p, err := factory.New(ctx, cfg.factoryConfig())
 		if err != nil {
-			return fmt.Errorf("gemini provider: %w", err)
+			return fmt.Errorf("provider: %w", err)
 		}
 
 		execCfg := &cron.ExecutorConfig{
@@ -231,15 +229,22 @@ func Run(ctx context.Context, cfg Config) error {
 	return nil
 }
 
+// factoryConfig returns a factory.Config from the daemon Config.
+func (c Config) factoryConfig() factory.Config {
+	return factory.Config{
+		Provider:     c.Provider,
+		Model:        c.Model,
+		APIKey:       c.APIKey,
+		GoogleSearch: c.GoogleSearch,
+		OllamaURL:    c.OllamaURL,
+	}
+}
+
 // initSessionManager creates the agent config and initializes the session manager.
 func initSessionManager(ctx context.Context, cfg Config, h *home.Home, _ *slog.Logger) (*SessionManager, error) {
-	var opts []gemini.Option
-	if cfg.GoogleSearch {
-		opts = append(opts, gemini.WithGoogleSearch())
-	}
-	p, err := gemini.New(ctx, cfg.APIKey, cfg.Model, opts...)
+	p, err := factory.New(ctx, cfg.factoryConfig())
 	if err != nil {
-		return nil, fmt.Errorf("gemini provider: %w", err)
+		return nil, fmt.Errorf("provider: %w", err)
 	}
 
 	agentCfg := agent.Config{

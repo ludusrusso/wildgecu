@@ -19,9 +19,9 @@ func TestExecuteToolsParallel_RunsConcurrently(t *testing.T) {
 	var maxConcurrent atomic.Int32
 
 	toolCalls := []ToolCall{
-		{Name: "tool_a", Args: map[string]any{"x": 1}},
-		{Name: "tool_b", Args: map[string]any{"x": 2}},
-		{Name: "tool_c", Args: map[string]any{"x": 3}},
+		{ID: "tool_a", Name: "tool_a", Args: map[string]any{"x": 1}},
+		{ID: "tool_b", Name: "tool_b", Args: map[string]any{"x": 2}},
+		{ID: "tool_c", Name: "tool_c", Args: map[string]any{"x": 3}},
 	}
 
 	executor := func(ctx context.Context, tc ToolCall) (string, error) {
@@ -67,8 +67,8 @@ func TestExecuteToolsParallel_RunsConcurrently(t *testing.T) {
 
 func TestExecuteToolsParallel_PreservesOrder(t *testing.T) {
 	toolCalls := []ToolCall{
-		{Name: "slow", Args: map[string]any{}},
-		{Name: "fast", Args: map[string]any{}},
+		{ID: "slow", Name: "slow", Args: map[string]any{}},
+		{ID: "fast", Name: "fast", Args: map[string]any{}},
 	}
 
 	executor := func(ctx context.Context, tc ToolCall) (string, error) {
@@ -93,8 +93,8 @@ func TestExecuteToolsParallel_PreservesOrder(t *testing.T) {
 
 func TestExecuteToolsParallel_ErrDone(t *testing.T) {
 	toolCalls := []ToolCall{
-		{Name: "normal", Args: map[string]any{}},
-		{Name: "done", Args: map[string]any{}},
+		{ID: "normal", Name: "normal", Args: map[string]any{}},
+		{ID: "done", Name: "done", Args: map[string]any{}},
 	}
 
 	executor := func(ctx context.Context, tc ToolCall) (string, error) {
@@ -123,7 +123,7 @@ func TestExecuteToolsParallel_ErrDone(t *testing.T) {
 
 func TestExecuteToolsParallel_ErrorFormatsMessage(t *testing.T) {
 	toolCalls := []ToolCall{
-		{Name: "failing", Args: map[string]any{}},
+		{ID: "failing", Name: "failing", Args: map[string]any{}},
 	}
 
 	executor := func(ctx context.Context, tc ToolCall) (string, error) {
@@ -142,8 +142,8 @@ func TestExecuteToolsParallel_ErrorFormatsMessage(t *testing.T) {
 
 func TestExecuteToolsParallel_CallbackInvoked(t *testing.T) {
 	toolCalls := []ToolCall{
-		{Name: "a", Args: map[string]any{}},
-		{Name: "b", Args: map[string]any{}},
+		{ID: "a", Name: "a", Args: map[string]any{}},
+		{ID: "b", Name: "b", Args: map[string]any{}},
 	}
 
 	var callbackCount atomic.Int32
@@ -182,7 +182,7 @@ func TestExecuteToolsParallel_EmptyToolCalls(t *testing.T) {
 
 func TestExecuteToolsParallel_SingleToolCall(t *testing.T) {
 	toolCalls := []ToolCall{
-		{Name: "only", Args: map[string]any{"key": "val"}},
+		{ID: "only", Name: "only", Args: map[string]any{"key": "val"}},
 	}
 
 	executor := func(ctx context.Context, tc ToolCall) (string, error) {
@@ -203,9 +203,9 @@ func TestExecuteToolsParallel_SingleToolCall(t *testing.T) {
 
 func TestExecuteToolsParallel_MultipleErrDone(t *testing.T) {
 	toolCalls := []ToolCall{
-		{Name: "done1", Args: map[string]any{}},
-		{Name: "done2", Args: map[string]any{}},
-		{Name: "normal", Args: map[string]any{}},
+		{ID: "done1", Name: "done1", Args: map[string]any{}},
+		{ID: "done2", Name: "done2", Args: map[string]any{}},
+		{ID: "normal", Name: "normal", Args: map[string]any{}},
 	}
 
 	executor := func(ctx context.Context, tc ToolCall) (string, error) {

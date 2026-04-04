@@ -60,6 +60,16 @@ func resolveHomePath(path string) (string, error) {
 	return filepath.Abs(path)
 }
 
+// resolveAPIKey returns the API key for the currently configured provider.
+func resolveAPIKey() string {
+	switch viper.GetString("provider") {
+	case "openai":
+		return viper.GetString("openai_api_key")
+	default:
+		return viper.GetString("gemini_api_key")
+	}
+}
+
 func initConfig() {
 	if homeFlag != "" {
 		resolved, err := resolveHomePath(homeFlag)
@@ -71,8 +81,11 @@ func initConfig() {
 		config.SetGlobalHome(resolved)
 	}
 
+	viper.SetDefault("provider", "gemini")
 	viper.SetDefault("model", "gemini-3-flash-preview")
 	viper.SetDefault("gemini_api_key", "")
+	viper.SetDefault("openai_api_key", "")
+	viper.SetDefault("ollama_base_url", "http://localhost:11434/v1")
 	viper.SetDefault("google_search", false)
 	viper.SetDefault("base_folder", "")
 
@@ -87,7 +100,10 @@ func initConfig() {
 		}
 	}
 
+	_ = viper.BindEnv("provider", "WILDGECU_PROVIDER")
 	_ = viper.BindEnv("gemini_api_key", "GEMINI_API_KEY")
+	_ = viper.BindEnv("openai_api_key", "OPENAI_API_KEY")
+	_ = viper.BindEnv("ollama_base_url", "OLLAMA_BASE_URL")
 	viper.AutomaticEnv()
 
 	_ = viper.ReadInConfig()

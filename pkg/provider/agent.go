@@ -160,6 +160,6 @@ func executeOne(ctx context.Context, tc ToolCall, execute ToolExecutor, onToolCa
 	return Message{
 		Role:       RoleTool,
 		Content:    result,
-		ToolCallID: tc.Name,
+		ToolCallID: tc.ID,
 	}, err
 }

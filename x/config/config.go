@@ -61,8 +61,17 @@ func ProjectFilePath(baseDir, filename string) (string, error) {
 }
 
 const defaultConfig = `# wildgecu configuration
-gemini_api_key: ""
+# provider: "gemini", "openai", or "ollama"
+provider: "gemini"
 model: "gemini-3-flash-preview"
+
+# Provider API keys (set the one matching your provider)
+gemini_api_key: ""
+openai_api_key: ""
+
+# Ollama settings (no API key required)
+# ollama_base_url: "http://localhost:11434/v1"
+
 # base_folder: "/path/to/project"
 `
 

@@ -10,7 +10,7 @@ import (
 
 	"wildgecu/pkg/agent"
 	"wildgecu/pkg/provider"
-	"wildgecu/pkg/provider/gemini"
+	"wildgecu/pkg/provider/factory"
 	"wildgecu/pkg/session"
 
 	"github.com/spf13/cobra"
@@ -28,9 +28,10 @@ var initCmd = &cobra.Command{
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
-	apiKey := viper.GetString("gemini_api_key")
-	if apiKey == "" {
-		return fmt.Errorf("GEMINI_API_KEY is not set; configure it in your config file or environment")
+	providerName := viper.GetString("provider")
+	apiKey := resolveAPIKey()
+	if apiKey == "" && providerName != "ollama" {
+		return fmt.Errorf("API key not set for provider %q; configure it in your config file or environment", providerName)
 	}
 
 	h, err := newHome()
@@ -49,14 +50,15 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 
-	model := viper.GetString("model")
-	var opts []gemini.Option
-	if viper.GetBool("google_search") {
-		opts = append(opts, gemini.WithGoogleSearch())
-	}
-	p, err := gemini.New(ctx, apiKey, model, opts...)
+	p, err := factory.New(ctx, factory.Config{
+		Provider:     providerName,
+		Model:        viper.GetString("model"),
+		APIKey:       apiKey,
+		GoogleSearch: viper.GetBool("google_search"),
+		OllamaURL:    viper.GetString("ollama_base_url"),
+	})
 	if err != nil {
-		return fmt.Errorf("gemini provider: %w", err)
+		return fmt.Errorf("provider: %w", err)
 	}
 
 	var soulContent string

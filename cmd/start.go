@@ -66,9 +66,11 @@ func runDaemon() error {
 
 	return daemon.Run(context.Background(), daemon.Config{
 		Version:       Version,
-		APIKey:        viper.GetString("gemini_api_key"),
+		Provider:      viper.GetString("provider"),
+		APIKey:        resolveAPIKey(),
 		Model:         viper.GetString("model"),
 		TelegramToken: viper.GetString("telegram_token"),
 		GoogleSearch:  viper.GetBool("google_search"),
+		OllamaURL:     viper.GetString("ollama_base_url"),
 	})
 }
