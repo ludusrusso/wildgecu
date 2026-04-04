@@ -23,6 +23,22 @@ const (
 	gapLines     = 1
 )
 
+// thinkingVerbs are philosophical verbs displayed while the agent is thinking.
+var thinkingVerbs = []string{
+	"Prodroming",
+	"Serendipiting",
+	"Dialectizing",
+	"Hermeneutizing",
+	"Phenomenologizing",
+	"Syllogizing",
+	"Apophating",
+	"Eudaimonizing",
+	"Enteleching",
+	"Catharting",
+	"Dichotomizing",
+	"Apodicticizing",
+}
+
 // programRef holds a pointer to the tea.Program so the streaming goroutine
 // can send messages. We use a wrapper because Bubble Tea copies the Model.
 type programRef struct {
@@ -45,6 +61,7 @@ type Model struct {
 	streamIdx      int
 	width          int
 	height         int
+	thinkingIdx    int
 	quitting       bool
 	loading        bool
 	ready          bool
@@ -247,6 +264,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.loading {
 			var cmd tea.Cmd
 			m.spinner, cmd = m.spinner.Update(msg)
+			m.thinkingIdx = (m.thinkingIdx + 1) % len(thinkingVerbs)
 			cmds = append(cmds, cmd)
 		}
 	}
@@ -313,7 +331,7 @@ func (m Model) View() string {
 		} else if m.activeToolCall != "" {
 			fmt.Fprintf(&b, "%s %s", m.spinner.View(), toolStyle.Render("Running tool: "+m.activeToolCall+"..."))
 		} else {
-			fmt.Fprintf(&b, "%s Thinking...", m.spinner.View())
+			fmt.Fprintf(&b, "%s %s...", m.spinner.View(), thinkingVerbs[m.thinkingIdx])
 		}
 	} else {
 		b.WriteString(m.textinput.View())
