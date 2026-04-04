@@ -15,7 +15,12 @@ func reExecDetached() error {
 		return fmt.Errorf("resolve executable: %w", err)
 	}
 
-	cmd := exec.Command(exe, "start", "--daemon")
+	args := []string{"start", "--daemon"}
+	if homeFlag != "" {
+		args = append(args, "--home", homeFlag)
+	}
+
+	cmd := exec.Command(exe, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	cmd.Stdout = nil
 	cmd.Stderr = nil

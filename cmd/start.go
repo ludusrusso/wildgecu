@@ -30,6 +30,9 @@ func startCmd() *cobra.Command {
 			if isDaemon {
 				return runDaemon()
 			}
+			if system && homeFlag != "" {
+				return fmt.Errorf("--home is not compatible with --system; the system service manager cannot forward custom flags")
+			}
 			if daemon.IsRunning() {
 				return fmt.Errorf("daemon is already running")
 			}

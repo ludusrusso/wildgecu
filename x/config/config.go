@@ -9,13 +9,27 @@ import (
 // DirName is the name of the wildgecu configuration directory.
 const DirName = ".wildgecu"
 
-// GlobalHome returns the path to ~/.wildgecu/, creating it if necessary.
+var globalHomeOverride string
+
+// SetGlobalHome overrides the default home directory.
+// The path must be absolute. Call this before any other config function.
+func SetGlobalHome(path string) {
+	globalHomeOverride = path
+}
+
+// GlobalHome returns the path to the wildgecu home directory, creating it if
+// necessary. By default this is ~/.wildgecu/; use SetGlobalHome to override.
 func GlobalHome() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("user home dir: %w", err)
+	var dir string
+	if globalHomeOverride != "" {
+		dir = globalHomeOverride
+	} else {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("user home dir: %w", err)
+		}
+		dir = filepath.Join(home, DirName)
 	}
-	dir := filepath.Join(home, DirName)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("create wildgecu home: %w", err)
 	}

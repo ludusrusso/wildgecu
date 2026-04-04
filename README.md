@@ -104,6 +104,10 @@ wildgecu chat         # same thing, explicit
 # Code Mode
 wildgecu code         # start a coding agent in the current directory
 
+# Custom home directory
+wildgecu --home /path/to/home start   # use a custom home instead of ~/.wildgecu
+wildgecu --home /path/to/home chat    # all subcommands respect --home
+
 # Daemon lifecycle
 wildgecu start        # start the background daemon
 wildgecu stop         # stop the daemon
@@ -173,7 +177,13 @@ The agent loads skills dynamically via the `load_skill` tool during conversation
 
 ## Configuration
 
-WildGecu uses a unified home directory at `~/.wildgecu/` for all global state.
+WildGecu uses a unified home directory at `~/.wildgecu/` for all global state. Override it with `--home`:
+
+```bash
+wildgecu --home /path/to/custom/home start
+```
+
+This allows running multiple independent instances, each with its own config, socket, crons, and skills. The flag accepts absolute paths, relative paths, and `~/...` tilde expansion.
 
 ### Global files (`~/.wildgecu/`)
 
@@ -282,7 +292,7 @@ wildgecu.go                  # Entry point → cmd.Execute()
 
 - **Single binary** — All commands (chat, daemon, cron, skills, service) are subcommands of one `wildgecu` binary.
 - **`pkg/` and `x/` layout** — Core domain packages live under `pkg/`, general-purpose utilities with no domain knowledge live under `x/`.
-- **Unified home (`~/.wildgecu/`)** — Config, PID, socket, logs, crons, and skills all live under one directory, managed by `x/config`.
+- **Unified home (`~/.wildgecu/`)** — Config, PID, socket, logs, crons, and skills all live under one directory, managed by `x/config`. Overridable via `--home` for running multiple isolated instances.
 - **`x/config` package** — Zero-dependency (stdlib only) shared package that all other packages import for path resolution.
 - **Project-local `.wildgecu/`** — Per-project identity files (`SOUL.md`, `MEMORY.md`, `USER.md`) stay in the working directory, separate from global daemon state.
 - **Home abstraction** — File operations are abstracted behind an interface (`FSHome` for disk, `MemHome` for tests), keeping the agent logic testable.
