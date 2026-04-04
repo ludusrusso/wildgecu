@@ -1,15 +1,1 @@
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "curl -fsSL https://mise.run | sh && ~/.local/bin/mise install --yes 2>&1 | tail -20"
-          }
-        ]
-      }
-    ]
-  }
-}
+{}
