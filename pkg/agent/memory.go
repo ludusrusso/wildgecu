@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"wildgecu/x/home"
+	"wildgecu/pkg/home"
 	"wildgecu/pkg/provider"
 	"wildgecu/pkg/provider/tool"
 )
@@ -22,14 +22,14 @@ type WriteMemoryOutput struct {
 }
 
 // RunMemoryAgent reviews the conversation and updates MEMORY.md.
-func RunMemoryAgent(ctx context.Context, p provider.Provider, h home.Home, messages []provider.Message, currentMemory string) error {
+func RunMemoryAgent(ctx context.Context, p provider.Provider, h *home.Home, messages []provider.Message, currentMemory string) error {
 	writeMemoryTool := tool.NewTool("write_memory",
 		"Write the updated MEMORY.md content.",
 		func(ctx context.Context, in WriteMemoryInput) (WriteMemoryOutput, error) {
 			if in.Content == "" {
 				return WriteMemoryOutput{}, fmt.Errorf("content must not be empty")
 			}
-			if err := h.Upsert("MEMORY.md", []byte(in.Content)); err != nil {
+			if err := h.Memory().Write(in.Content); err != nil {
 				return WriteMemoryOutput{}, fmt.Errorf("writing MEMORY.md: %w", err)
 			}
 			return WriteMemoryOutput{Status: "ok"}, provider.ErrDone

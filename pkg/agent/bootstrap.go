@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"wildgecu/x/home"
+	"wildgecu/pkg/home"
 	"wildgecu/pkg/provider"
 	"wildgecu/pkg/provider/tool"
 	"wildgecu/pkg/session"
@@ -23,7 +23,7 @@ type WriteSoulOutput struct {
 // BootstrapConfig returns a session.Config for the bootstrap interview flow.
 // The executor writes SOUL.md and signals ErrDone; soulContent is populated
 // via the pointer so the caller can read it after tui.Run returns.
-func BootstrapConfig(ctx context.Context, p provider.Provider, h home.Home, soulContent *string) *session.Config {
+func BootstrapConfig(ctx context.Context, p provider.Provider, h *home.Home, soulContent *string) *session.Config {
 	writeSoulTool := tool.NewTool("write_soul",
 		"Write your SOUL.md -- commit your identity to memory. Call this when you understand who you are.",
 		func(ctx context.Context, in WriteSoulInput) (WriteSoulOutput, error) {

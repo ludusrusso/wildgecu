@@ -13,7 +13,7 @@ import (
 
 	"wildgecu/pkg/agent"
 	"wildgecu/pkg/cron"
-	"wildgecu/x/home"
+	"wildgecu/pkg/home"
 	"wildgecu/pkg/provider/gemini"
 	"wildgecu/x/config"
 	"wildgecu/pkg/chat/telegram"
@@ -246,7 +246,6 @@ func initSessionManager(ctx context.Context, cfg Config, _ *slog.Logger) (*Sessi
 		Provider:  p,
 		Home:      homeFS,
 		Workspace: homeFS, // daemon uses global home as workspace
-		HomeDir:   globalHome,
 	}
 
 	return NewSessionManager(ctx, agentCfg)

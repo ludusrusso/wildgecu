@@ -1,60 +1,56 @@
 package agent
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
-	"wildgecu/x/home"
+	"wildgecu/pkg/home"
 )
 
-// LoadSoul reads SOUL.md from the home Homer. Returns (content, err).
-// Returns home.ErrNotFound when the file does not exist.
-func LoadSoul(h home.Home) (string, error) {
-	data, err := h.Get("SOUL.md")
+// LoadSoul reads SOUL.md from the home directory. Returns (content, err).
+// Returns ("", nil) when the file does not exist.
+func LoadSoul(h *home.Home) (string, error) {
+	content, err := h.Soul().Get()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("reading SOUL.md: %w", err)
 	}
-	return string(data), nil
+	return content, nil
 }
 
-// writeSoul writes SOUL.md to the home Homer.
-func writeSoul(h home.Home, content string) error {
-	if err := h.Upsert("SOUL.md", []byte(content)); err != nil {
+// writeSoul writes SOUL.md to the home directory.
+func writeSoul(h *home.Home, content string) error {
+	if err := h.Soul().Write(content); err != nil {
 		return fmt.Errorf("writing SOUL.md: %w", err)
 	}
 	return nil
 }
 
-// loadWorkspaceFile reads a file from the workspace Homer.
-// Returns "" if the file does not exist.
-func loadWorkspaceFile(ws home.Home, filename string) (string, error) {
+// loadWorkspaceFile reads USER.md from the workspace.
+// Returns "" if ws is nil or the file does not exist.
+func loadWorkspaceFile(ws *home.Home) (string, error) {
 	if ws == nil {
 		return "", nil
 	}
-	data, err := ws.Get(filename)
-	if errors.Is(err, home.ErrNotFound) {
-		return "", nil
-	}
+	content, err := ws.User().Get()
 	if err != nil {
-		return "", fmt.Errorf("reading %s: %w", filename, err)
+		return "", fmt.Errorf("reading USER.md: %w", err)
 	}
-	return string(data), nil
+	return content, nil
 }
 
-// LoadMemory reads MEMORY.md from the home Homer. Returns (content, err).
-// Returns home.ErrNotFound when the file does not exist.
-func LoadMemory(h home.Home) (string, error) {
-	data, err := h.Get("MEMORY.md")
+// LoadMemory reads MEMORY.md from the home directory. Returns (content, err).
+// Returns ("", nil) when the file does not exist.
+func LoadMemory(h *home.Home) (string, error) {
+	content, err := h.Memory().Get()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("reading MEMORY.md: %w", err)
 	}
-	return string(data), nil
+	return content, nil
 }
 
 // BuildSystemPrompt assembles the full system prompt from the embedded agent
 // prompt, the runtime soul content, memory, and an optional USER.md file.
-func BuildSystemPrompt(workspace home.Home, soulContent, memoryContent string) string {
+func BuildSystemPrompt(workspace *home.Home, soulContent, memoryContent string) string {
 	sections := []string{
 		fmt.Sprintf("# Agent\n\n%s", strings.TrimSpace(agentPrompt)),
 	}
@@ -67,7 +63,7 @@ func BuildSystemPrompt(workspace home.Home, soulContent, memoryContent string) s
 		sections = append(sections, fmt.Sprintf("# Memory\n\n%s", m))
 	}
 
-	if userPrefs, err := loadWorkspaceFile(workspace, "USER.md"); err == nil && strings.TrimSpace(userPrefs) != "" {
+	if userPrefs, err := loadWorkspaceFile(workspace); err == nil && strings.TrimSpace(userPrefs) != "" {
 		sections = append(sections, fmt.Sprintf("# User Preferences\n\n%s", strings.TrimSpace(userPrefs)))
 	}
 
@@ -76,7 +72,7 @@ func BuildSystemPrompt(workspace home.Home, soulContent, memoryContent string) s
 
 // BuildCodeSystemPrompt assembles the system prompt for code mode.
 // It uses CODE_AGENT.md instead of AGENT.md, with {CWD} replaced by workDir.
-func BuildCodeSystemPrompt(workspace home.Home, soulContent, memoryContent, workDir string) string {
+func BuildCodeSystemPrompt(workspace *home.Home, soulContent, memoryContent, workDir string) string {
 	prompt := strings.ReplaceAll(codeAgentPrompt, "{CWD}", workDir)
 
 	sections := []string{
@@ -91,7 +87,7 @@ func BuildCodeSystemPrompt(workspace home.Home, soulContent, memoryContent, work
 		sections = append(sections, fmt.Sprintf("# Memory\n\n%s", m))
 	}
 
-	if userPrefs, err := loadWorkspaceFile(workspace, "USER.md"); err == nil && strings.TrimSpace(userPrefs) != "" {
+	if userPrefs, err := loadWorkspaceFile(workspace); err == nil && strings.TrimSpace(userPrefs) != "" {
 		sections = append(sections, fmt.Sprintf("# User Preferences\n\n%s", strings.TrimSpace(userPrefs)))
 	}
 
