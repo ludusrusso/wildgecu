@@ -90,7 +90,7 @@ func (p *Provider) GenerateStream(ctx context.Context, params *provider.Generate
 		defer close(errCh)
 
 		stream := p.client.Chat.Completions.NewStreaming(ctx, body)
-		defer stream.Close()
+		defer func() { _ = stream.Close() }()
 
 		// Accumulate tool call deltas by index.
 		type toolAcc struct {
@@ -122,18 +122,18 @@ func (p *Provider) GenerateStream(ctx context.Context, params *provider.Generate
 				}
 
 				// Accumulate tool call deltas.
-				for _, tc := range delta.ToolCalls {
-					idx := int(tc.Index)
+				for i := range delta.ToolCalls {
+					idx := int(delta.ToolCalls[i].Index)
 					for len(toolCalls) <= idx {
 						toolCalls = append(toolCalls, toolAcc{})
 					}
-					if tc.ID != "" {
-						toolCalls[idx].id = tc.ID
+					if delta.ToolCalls[i].ID != "" {
+						toolCalls[idx].id = delta.ToolCalls[i].ID
 					}
-					if tc.Function.Name != "" {
-						toolCalls[idx].name = tc.Function.Name
+					if delta.ToolCalls[i].Function.Name != "" {
+						toolCalls[idx].name = delta.ToolCalls[i].Function.Name
 					}
-					toolCalls[idx].args += tc.Function.Arguments
+					toolCalls[idx].args += delta.ToolCalls[i].Function.Arguments
 				}
 
 				// When the model finishes tool_calls, emit them.
@@ -270,11 +270,11 @@ func toResponse(resp *oai.ChatCompletion) *provider.Response {
 	r.Message.Role = provider.RoleModel
 	r.Message.Content = msg.Content
 
-	for _, tc := range msg.ToolCalls {
-		args, _ := parseArgs(tc.Function.Arguments)
+	for i := range msg.ToolCalls {
+		args, _ := parseArgs(msg.ToolCalls[i].Function.Arguments)
 		r.Message.ToolCalls = append(r.Message.ToolCalls, provider.ToolCall{
-			ID:   tc.ID,
-			Name: tc.Function.Name,
+			ID:   msg.ToolCalls[i].ID,
+			Name: msg.ToolCalls[i].Function.Name,
 			Args: args,
 		})
 	}
