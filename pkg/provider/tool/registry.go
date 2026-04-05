@@ -18,12 +18,17 @@ func NewRegistry(tools ...Tool) *Registry {
 	r := &Registry{
 		tools: make(map[string]Tool, len(tools)),
 	}
+	r.Add(tools)
+	return r
+}
+
+// Add appends tools to the registry.
+func (r *Registry) Add(tools []Tool) {
 	for _, t := range tools {
 		name := t.Definition().Name
 		r.tools[name] = t
 		r.order = append(r.order, name)
 	}
-	return r
 }
 
 // Tools returns provider.Tool definitions for all registered tools.

@@ -1,4 +1,4 @@
-package agent
+package tools
 
 import (
 	"context"
@@ -11,7 +11,17 @@ import (
 	"wildgecu/pkg/provider/tool"
 )
 
-// resolvePath resolves inputPath relative to workDir. Prevents path traversal.
+// FileTools returns file-operation tools bound to workDir.
+func FileTools(workDir string) []tool.Tool {
+	return []tool.Tool{
+		newListFilesTool(workDir),
+		newReadFileTool(workDir),
+		newWriteFileTool(workDir),
+		newUpdateFileTool(workDir),
+	}
+}
+
+// resolvePath resolves inputPath relative to workDir.
 func resolvePath(workDir, inputPath string) string {
 	if filepath.IsAbs(inputPath) {
 		return filepath.Clean(inputPath)
@@ -19,31 +29,27 @@ func resolvePath(workDir, inputPath string) string {
 	return filepath.Join(workDir, inputPath)
 }
 
-
 // --- list_files ---
 
-// ListFilesInput is the input for the list_files tool.
-type ListFilesInput struct {
+type listFilesInput struct {
 	Path    string `json:"path,omitempty" description:"Directory to list (defaults to working directory)"`
 	Pattern string `json:"pattern,omitempty" description:"Glob pattern to filter entries (e.g. *.go)"`
 }
 
-// FileEntry describes a single directory entry.
-type FileEntry struct {
+type fileEntry struct {
 	Name  string `json:"name"`
 	IsDir bool   `json:"is_dir"`
 	Size  int64  `json:"size"`
 }
 
-// ListFilesOutput is the output for the list_files tool.
-type ListFilesOutput struct {
+type listFilesOutput struct {
 	Path    string      `json:"path"`
-	Entries []FileEntry `json:"entries"`
+	Entries []fileEntry `json:"entries"`
 }
 
 func newListFilesTool(workDir string) tool.Tool {
 	return tool.NewTool("list_files", "List files and directories. Use this instead of bash ls.",
-		func(ctx context.Context, in ListFilesInput) (ListFilesOutput, error) {
+		func(ctx context.Context, in listFilesInput) (listFilesOutput, error) {
 			dir := workDir
 			if in.Path != "" {
 				dir = resolvePath(workDir, in.Path)
@@ -51,10 +57,10 @@ func newListFilesTool(workDir string) tool.Tool {
 
 			entries, err := os.ReadDir(dir)
 			if err != nil {
-				return ListFilesOutput{}, fmt.Errorf("reading directory %s: %w", dir, err)
+				return listFilesOutput{}, fmt.Errorf("reading directory %s: %w", dir, err)
 			}
 
-			result := make([]FileEntry, 0, len(entries))
+			result := make([]fileEntry, 0, len(entries))
 			for _, e := range entries {
 				if in.Pattern != "" {
 					matched, _ := filepath.Match(in.Pattern, e.Name())
@@ -66,7 +72,7 @@ func newListFilesTool(workDir string) tool.Tool {
 				if err != nil {
 					continue
 				}
-				result = append(result, FileEntry{
+				result = append(result, fileEntry{
 					Name:  e.Name(),
 					IsDir: e.IsDir(),
 					Size:  info.Size(),
@@ -76,22 +82,20 @@ func newListFilesTool(workDir string) tool.Tool {
 				}
 			}
 
-			return ListFilesOutput{Path: dir, Entries: result}, nil
+			return listFilesOutput{Path: dir, Entries: result}, nil
 		},
 	)
 }
 
 // --- read_file ---
 
-// ReadFileInput is the input for the read_file tool.
-type ReadFileInput struct {
+type readFileInput struct {
 	Path   string `json:"path" description:"File path to read"`
 	Offset int    `json:"offset,omitempty" description:"1-based starting line number"`
 	Limit  int    `json:"limit,omitempty" description:"Maximum number of lines to return"`
 }
 
-// ReadFileOutput is the output for the read_file tool.
-type ReadFileOutput struct {
+type readFileOutput struct {
 	Path       string `json:"path"`
 	Content    string `json:"content"`
 	TotalLines int    `json:"total_lines"`
@@ -99,16 +103,16 @@ type ReadFileOutput struct {
 
 func newReadFileTool(workDir string) tool.Tool {
 	return tool.NewTool("read_file", "Read a file's content with line numbers. Use this instead of bash cat/head/tail.",
-		func(ctx context.Context, in ReadFileInput) (ReadFileOutput, error) {
+		func(ctx context.Context, in readFileInput) (readFileOutput, error) {
 			p := resolvePath(workDir, in.Path)
 
 			data, err := os.ReadFile(p)
 			if err != nil {
-				return ReadFileOutput{}, fmt.Errorf("reading %s: %w", p, err)
+				return readFileOutput{}, fmt.Errorf("reading %s: %w", p, err)
 			}
 
 			if !utf8.Valid(data) {
-				return ReadFileOutput{}, fmt.Errorf("file %s appears to be binary", p)
+				return readFileOutput{}, fmt.Errorf("file %s appears to be binary", p)
 			}
 
 			lines := strings.Split(string(data), "\n")
@@ -139,7 +143,7 @@ func newReadFileTool(workDir string) tool.Tool {
 				fmt.Fprintf(&b, "%d\t%s\n", start+i+1, line)
 			}
 
-			return ReadFileOutput{
+			return readFileOutput{
 				Path:       p,
 				Content:    b.String(),
 				TotalLines: totalLines,
@@ -150,81 +154,76 @@ func newReadFileTool(workDir string) tool.Tool {
 
 // --- write_file ---
 
-// WriteFileInput is the input for the write_file tool.
-type WriteFileInput struct {
+type writeFileInput struct {
 	Path    string `json:"path" description:"File path to write"`
 	Content string `json:"content" description:"Full file content to write"`
 	Create  bool   `json:"create,omitempty" description:"Create parent directories if they don't exist"`
 }
 
-// WriteFileOutput is the output for the write_file tool.
-type WriteFileOutput struct {
+type writeFileOutput struct {
 	Path  string `json:"path"`
 	Bytes int    `json:"bytes"`
 }
 
 func newWriteFileTool(workDir string) tool.Tool {
 	return tool.NewTool("write_file", "Write content to a file. Always read_file first to understand context.",
-		func(ctx context.Context, in WriteFileInput) (WriteFileOutput, error) {
+		func(ctx context.Context, in writeFileInput) (writeFileOutput, error) {
 			p := resolvePath(workDir, in.Path)
 
 			if in.Create {
 				dir := filepath.Dir(p)
 				if err := os.MkdirAll(dir, 0o755); err != nil {
-					return WriteFileOutput{}, fmt.Errorf("creating directories for %s: %w", p, err)
+					return writeFileOutput{}, fmt.Errorf("creating directories for %s: %w", p, err)
 				}
 			}
 
 			content := []byte(in.Content)
 			if err := os.WriteFile(p, content, 0o644); err != nil {
-				return WriteFileOutput{}, fmt.Errorf("writing %s: %w", p, err)
+				return writeFileOutput{}, fmt.Errorf("writing %s: %w", p, err)
 			}
 
-			return WriteFileOutput{Path: p, Bytes: len(content)}, nil
+			return writeFileOutput{Path: p, Bytes: len(content)}, nil
 		},
 	)
 }
 
 // --- update_file ---
 
-// UpdateFileInput is the input for the update_file tool.
-type UpdateFileInput struct {
+type updateFileInput struct {
 	Path      string `json:"path" description:"File path to update"`
 	OldString string `json:"old_string" description:"Exact string to find in the file (must be unique)"`
 	NewString string `json:"new_string" description:"Replacement string"`
 }
 
-// UpdateFileOutput is the output for the update_file tool.
-type UpdateFileOutput struct {
+type updateFileOutput struct {
 	Path string `json:"path"`
 }
 
 func newUpdateFileTool(workDir string) tool.Tool {
 	return tool.NewTool("update_file", "Replace an exact string in a file. The old_string must appear exactly once. Always read_file first.",
-		func(ctx context.Context, in UpdateFileInput) (UpdateFileOutput, error) {
+		func(ctx context.Context, in updateFileInput) (updateFileOutput, error) {
 			p := resolvePath(workDir, in.Path)
 
 			data, err := os.ReadFile(p)
 			if err != nil {
-				return UpdateFileOutput{}, fmt.Errorf("reading %s: %w", p, err)
+				return updateFileOutput{}, fmt.Errorf("reading %s: %w", p, err)
 			}
 
 			content := string(data)
 			count := strings.Count(content, in.OldString)
 			if count == 0 {
-				return UpdateFileOutput{}, fmt.Errorf("old_string not found in %s", p)
+				return updateFileOutput{}, fmt.Errorf("old_string not found in %s", p)
 			}
 			if count > 1 {
-				return UpdateFileOutput{}, fmt.Errorf("old_string appears %d times in %s — must be unique", count, p)
+				return updateFileOutput{}, fmt.Errorf("old_string appears %d times in %s — must be unique", count, p)
 			}
 
 			updated := strings.Replace(content, in.OldString, in.NewString, 1)
-			// #nosec G703 - path is resolved through resolvePath from user input
 			if err := os.WriteFile(p, []byte(updated), 0o644); err != nil {
-				return UpdateFileOutput{}, fmt.Errorf("writing %s: %w", p, err)
+				return updateFileOutput{}, fmt.Errorf("writing %s: %w", p, err)
 			}
 
-			return UpdateFileOutput{Path: p}, nil
+			return updateFileOutput{Path: p}, nil
 		},
 	)
 }

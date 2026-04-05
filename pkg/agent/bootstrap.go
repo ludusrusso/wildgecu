@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"wildgecu/pkg/agent/tools"
 	"wildgecu/pkg/home"
 	"wildgecu/pkg/provider"
 	"wildgecu/pkg/provider/tool"
@@ -38,7 +39,7 @@ func BootstrapConfig(ctx context.Context, p provider.Provider, h *home.Home, sou
 		},
 	)
 
-	registry := tool.NewRegistry(writeSoulTool, fetchURLTool)
+	registry := tool.NewRegistry(writeSoulTool, tools.FetchURLTool)
 
 	return &session.Config{
 		Provider:     p,

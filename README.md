@@ -269,68 +269,22 @@ export OLLAMA_BASE_URL="http://localhost:11434/v1"  # default
 wildgecu.go                  # Entry point → cmd.Execute()
 │
 ├── cmd/                     # CLI layer (Cobra)
-│   ├── root.go              # Root command, config init, Version var
-│   ├── init.go              # init subcommand — bootstrap SOUL.md
-│   ├── chat.go              # chat subcommand (also default)
-│   ├── start.go             # start subcommand + runDaemon()
-│   ├── stop.go / restart.go # daemon lifecycle
-│   ├── status.go / health.go
-│   ├── logs.go              # logs subcommand
-│   ├── update.go            # self-update subcommand
-│   ├── install.go           # system service install/uninstall
-│   ├── cron.go / cron_add.go
-│   └── skill.go / skill_add.go
 │
 ├── pkg/                     # Core domain packages
-│   ├── agent/               # Agent logic
-│   │   ├── agent.go         # Prepare() / Finalize() — orchestrates bootstrap → chat
-│   │   ├── bootstrap.go     # Bootstrap interview + write_soul tool
-│   │   ├── soul.go          # Soul I/O and system prompt assembly
-│   │   ├── memory.go        # Memory persistence and curation
-│   │   ├── prompt.go        # Embeds AGENT.md, BOOTSTRAP.md, MEMORY_AGENT.md
-│   │   ├── AGENT.md         # Base agent behavior prompt
-│   │   ├── BOOTSTRAP.md     # Bootstrap conversation prompt
-│   │   └── MEMORY_AGENT.md  # Memory curation instructions
-│   │
+│   ├── agent/               # Agent orchestration (Prepare, Finalize, bootstrap, memory, prompts)
+│   │   └── tools/           # Tool suites (general, exec, files, skills)
 │   ├── provider/            # LLM provider abstraction
-│   │   ├── provider.go      # Provider interface, types
-│   │   ├── factory/          # Provider factory (factory.New)
-│   │   ├── agent.go         # RunAgentLoop / RunAgentLoopStream
-│   │   ├── tool/            # Type-safe tool system (Tool, Registry, Executor)
+│   │   ├── tool/            # Type-safe tool framework (Tool, Registry, schema generation)
+│   │   ├── factory/         # Provider factory
 │   │   ├── gemini/          # Google Gemini implementation
 │   │   └── openai/          # OpenAI / Ollama implementation
-│   │
-│   ├── session/             # Conversation management
-│   │   └── session.go       # RunTurn, RunTurnStream, callbacks
-│   │
-│   ├── chat/                # Chat frontends
-│   │   ├── tui/             # Bubble Tea terminal UI
-│   │   └── telegram/        # Telegram bot bridge
-│   │
-│   ├── cron/                # Cron scheduling
-│   │   ├── cron.go          # CronJob struct, Parse, LoadAll
-│   │   ├── executor.go      # Execute() — runs a single cron job
-│   │   └── scheduler.go     # Scheduler — wraps gocron
-│   │
-│   ├── skill/               # Skills system
-│   │   └── skill.go         # Skill struct, Parse, Load
-│   │
-│   └── daemon/              # Daemon infrastructure
-│       ├── daemon.go        # Main loop, socket server, signals
-│       ├── sessions.go      # SessionManager for concurrent chats
-│       ├── socket.go        # Unix socket server + command dispatch
-│       ├── chat_client.go   # NDJSON streaming client for TUI/Telegram
-│       ├── client.go        # Command-based IPC client
-│       ├── watchdog.go      # Periodic health checker
-│       ├── updater.go       # Self-update via binary replacement
-│       ├── pidfile.go
-│       └── service.go       # System service integration
+│   ├── session/             # Conversation management (RunTurn, RunTurnStream)
+│   ├── chat/                # Chat frontends (tui/, telegram/)
+│   ├── cron/                # Cron scheduling and execution
+│   ├── skill/               # Skills system (parse, load)
+│   └── daemon/              # Background daemon (socket, sessions, watchdog, updater, service)
 │
-└── x/                       # General-purpose utilities
-    ├── config/              # Shared config (GlobalHome, ProjectDir)
-    ├── home/                # File abstraction (Home, FSHome, MemHome)
-    ├── context/             # Context utilities
-    └── debug/               # Debug logging
+└── x/                       # General-purpose utilities (config, home, context, debug)
 ```
 
 ### Key design decisions

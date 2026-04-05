@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"wildgecu/pkg/agent/tools"
 	"wildgecu/pkg/home"
 	"wildgecu/pkg/provider"
 	"wildgecu/pkg/provider/tool"
@@ -46,7 +47,10 @@ func Prepare(ctx context.Context, cfg Config) (*session.Config, *debug.Logger, e
 	}
 
 	skillsDir := cfg.Home.SkillsDir()
-	tools := loadTools(skillsDir, cfg.Home.Dir())
+	registry := tool.NewRegistry()
+	registry.Add(tools.GeneralTools())
+	registry.Add(tools.ExecTools(cfg.Home.Dir()))
+	registry.Add(tools.SkillTools(skillsDir))
 	systemPrompt := BuildSystemPrompt(cfg.Workspace, soulContent, memoryContent)
 	if dbg != nil {
 		dbg.SystemPrompt(systemPrompt)
@@ -55,8 +59,8 @@ func Prepare(ctx context.Context, cfg Config) (*session.Config, *debug.Logger, e
 	chatCfg := &session.Config{
 		Provider:     cfg.Provider,
 		SystemPrompt: systemPrompt,
-		Tools:        tools.Tools(),
-		Executor:     tools.Executor(),
+		Tools:        registry.Tools(),
+		Executor:     registry.Executor(),
 		WelcomeText:  "Agent ready.",
 		Debug:        dbg,
 	}
@@ -106,7 +110,11 @@ func PrepareCode(ctx context.Context, cfg Config, workDir string) (*session.Conf
 	}
 
 	skillsDir := cfg.Home.SkillsDir()
-	tools := loadCodeTools(skillsDir, workDir)
+	registry := tool.NewRegistry()
+	registry.Add(tools.GeneralTools())
+	registry.Add(tools.ExecTools(workDir))
+	registry.Add(tools.FileTools(workDir))
+	registry.Add(tools.SkillTools(skillsDir))
 	systemPrompt := BuildCodeSystemPrompt(cfg.Workspace, soulContent, memoryContent, workDir)
 	if dbg != nil {
 		dbg.SystemPrompt(systemPrompt)
@@ -115,35 +123,11 @@ func PrepareCode(ctx context.Context, cfg Config, workDir string) (*session.Conf
 	codeCfg := &session.Config{
 		Provider:     cfg.Provider,
 		SystemPrompt: systemPrompt,
-		Tools:        tools.Tools(),
-		Executor:     tools.Executor(),
+		Tools:        registry.Tools(),
+		Executor:     registry.Executor(),
 		WelcomeText:  "Code agent ready. Working directory: " + workDir,
 		Debug:        dbg,
 	}
 
 	return codeCfg, dbg, nil
-}
-
-func loadTools(skillsDir, homeDir string) *tool.Registry {
-	tools := []tool.Tool{getCurrentTimeTool, newBashTool(homeDir), newNodeTool(homeDir)}
-	if skillsDir != "" {
-		tools = append(tools, newLoadSkillTool(skillsDir))
-	}
-	return tool.NewRegistry(tools...)
-}
-
-func loadCodeTools(skillsDir, workDir string) *tool.Registry {
-	tools := []tool.Tool{
-		getCurrentTimeTool,
-		newBashTool(workDir),
-		newNodeTool(workDir),
-		newListFilesTool(workDir),
-		newReadFileTool(workDir),
-		newWriteFileTool(workDir),
-		newUpdateFileTool(workDir),
-	}
-	if skillsDir != "" {
-		tools = append(tools, newLoadSkillTool(skillsDir))
-	}
-	return tool.NewRegistry(tools...)
 }
