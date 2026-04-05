@@ -10,15 +10,17 @@ import (
 	"wildgecu/pkg/provider"
 	"wildgecu/pkg/provider/tool"
 	"wildgecu/pkg/session"
+	"wildgecu/pkg/telegram/auth"
 	"wildgecu/x/debug"
 )
 
 // Config holds the configuration needed to run the agent.
 type Config struct {
-	Provider  provider.Provider
-	Home      *home.Home
-	Workspace *home.Home
-	Debug     bool
+	Provider     provider.Provider
+	Home         *home.Home
+	Workspace    *home.Home
+	TelegramAuth *auth.Store // nil when Telegram auth is not configured
+	Debug        bool
 }
 
 // Prepare setup the agent environment, loads soul/memory and returns a session configuration.
@@ -52,6 +54,7 @@ func Prepare(ctx context.Context, cfg Config) (*session.Config, *debug.Logger, e
 	registry.Add(tools.ExecTools(cfg.Home.Dir()))
 	registry.Add(tools.SkillTools(skillsDir))
 	registry.Add(tools.InformTools())
+	registry.Add(tools.TelegramTools(cfg.TelegramAuth))
 	systemPrompt := BuildSystemPrompt(cfg.Workspace, soulContent, memoryContent)
 	if dbg != nil {
 		dbg.SystemPrompt(systemPrompt)
@@ -117,6 +120,7 @@ func PrepareCode(ctx context.Context, cfg Config, workDir string) (*session.Conf
 	registry.Add(tools.FileTools(workDir))
 	registry.Add(tools.SkillTools(skillsDir))
 	registry.Add(tools.InformTools())
+	registry.Add(tools.TelegramTools(cfg.TelegramAuth))
 	systemPrompt := BuildCodeSystemPrompt(cfg.Workspace, soulContent, memoryContent, workDir)
 	if dbg != nil {
 		dbg.SystemPrompt(systemPrompt)

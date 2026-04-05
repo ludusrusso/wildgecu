@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"wildgecu/pkg/telegram/auth"
 )
 
 // SessionProvider abstracts the daemon's SessionManager so that the telegram
@@ -22,13 +23,15 @@ type SessionProvider interface {
 type Bridge struct {
 	bot          *tgbotapi.BotAPI
 	sm           SessionProvider
+	auth         *auth.Store
 	chatSessions map[int64]string // chatID → session ID
 	mu           sync.RWMutex
 	logger       *slog.Logger
 }
 
 // New creates a new Telegram bridge using the given session provider.
-func New(token string, sm SessionProvider) (*Bridge, error) {
+// authStore may be nil to allow all users.
+func New(token string, sm SessionProvider, authStore *auth.Store) (*Bridge, error) {
 	bot, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
 		return nil, err
@@ -36,6 +39,7 @@ func New(token string, sm SessionProvider) (*Bridge, error) {
 	return &Bridge{
 		bot:          bot,
 		sm:           sm,
+		auth:         authStore,
 		chatSessions: make(map[int64]string),
 		logger:       slog.Default(),
 	}, nil
@@ -65,6 +69,20 @@ func (b *Bridge) Run(ctx context.Context) error {
 
 func (b *Bridge) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 	chatID := msg.Chat.ID
+
+	// Auth gate: block unauthenticated users before any processing.
+	if b.auth != nil && msg.From != nil && !b.auth.IsAllowed(msg.From.ID) {
+		otp := b.auth.GetOrCreateOTP(msg.From.ID)
+		text := fmt.Sprintf(
+			"You are not authorized. Ask the owner to approve you with this code:\n\n%s\n\nThey can run: wildgecu approve telegram %s",
+			otp, otp,
+		)
+		reply := tgbotapi.NewMessage(chatID, text)
+		if _, err := b.bot.Send(reply); err != nil {
+			b.logger.Error("telegram auth reply error", "error", err)
+		}
+		return
+	}
 
 	if msg.Text == "/start" {
 		b.sendMessages(chatID, b.sm.WelcomeText())

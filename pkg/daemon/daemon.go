@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"wildgecu/pkg/cron"
 	"wildgecu/pkg/home"
 	"wildgecu/pkg/provider/factory"
+	"wildgecu/pkg/telegram/auth"
 	"wildgecu/x/config"
 )
 
@@ -67,8 +69,18 @@ func Run(ctx context.Context, cfg Config) error {
 		return fmt.Errorf("home: %w", err)
 	}
 
+	// --- Telegram auth store ---
+	var tgAuth *auth.Store
+	if cfg.TelegramToken != "" {
+		tgAuthPath := filepath.Join(globalHome, "telegram.json")
+		tgAuth, err = auth.New(tgAuthPath)
+		if err != nil {
+			return fmt.Errorf("telegram auth: %w", err)
+		}
+	}
+
 	// --- Session manager initialization ---
-	sm, err := initSessionManager(ctx, cfg, h, logger)
+	sm, err := initSessionManager(ctx, cfg, h, tgAuth, logger)
 	if err != nil {
 		return fmt.Errorf("cannot start daemon: %w", err)
 	}
@@ -124,6 +136,23 @@ func Run(ctx context.Context, cfg Config) error {
 		return &Response{OK: true, Payload: "update started"}, nil
 	})
 
+	if tgAuth != nil {
+		srv.Handle("approve-telegram", func(r *Request) (*Response, error) {
+			otp, _ := r.Args["otp"].(string)
+			if otp == "" {
+				return &Response{OK: false, Error: "missing otp argument"}, nil
+			}
+			userID, err := tgAuth.ApproveByOTP(otp)
+			if err != nil {
+				return &Response{OK: false, Error: "Invalid OTP"}, nil
+			}
+			return &Response{
+				OK:      true,
+				Payload: fmt.Sprintf("User %d approved", userID),
+			}, nil
+		})
+	}
+
 	// --- Cron scheduler initialization ---
 	if h != nil {
 		p, err := factory.New(ctx, cfg.factoryConfig())
@@ -174,7 +203,7 @@ func Run(ctx context.Context, cfg Config) error {
 
 	// --- Telegram bot ---
 	if cfg.TelegramToken != "" && sm != nil {
-		tgBridge, err := telegram.New(cfg.TelegramToken, sm)
+		tgBridge, err := telegram.New(cfg.TelegramToken, sm, tgAuth)
 		if err != nil {
 			logger.Warn("telegram bot disabled", "error", err)
 		} else {
@@ -241,16 +270,17 @@ func (c Config) factoryConfig() factory.Config {
 }
 
 // initSessionManager creates the agent config and initializes the session manager.
-func initSessionManager(ctx context.Context, cfg Config, h *home.Home, _ *slog.Logger) (*SessionManager, error) {
+func initSessionManager(ctx context.Context, cfg Config, h *home.Home, tgAuth *auth.Store, _ *slog.Logger) (*SessionManager, error) {
 	p, err := factory.New(ctx, cfg.factoryConfig())
 	if err != nil {
 		return nil, fmt.Errorf("provider: %w", err)
 	}
 
 	agentCfg := agent.Config{
-		Provider:  p,
-		Home:      h,
-		Workspace: h, // daemon uses global home as workspace
+		Provider:     p,
+		Home:         h,
+		Workspace:    h, // daemon uses global home as workspace
+		TelegramAuth: tgAuth,
 	}
 
 	return NewSessionManager(ctx, agentCfg)
