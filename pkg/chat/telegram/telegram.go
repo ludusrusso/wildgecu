@@ -18,7 +18,6 @@ import (
 // package does not depend on internal/daemon.
 type SessionProvider interface {
 	CreateSession() string // returns session ID
-	ResetSession(ctx context.Context, id string) (string, error)
 	RunTurnStreamRaw(ctx context.Context, id string, input string, onChunk func(string), onToolCall func(string, string), onInform func(string)) (string, error)
 	WelcomeText() string
 }
@@ -223,6 +222,7 @@ func (b *Bridge) updateSessionFromResult(chatID int64, result string) {
 	const prefix = "New session: "
 	idx := strings.Index(result, prefix)
 	if idx < 0 {
+		b.logger.Warn("updateSessionFromResult: could not parse new session ID from /clean result", "result", result)
 		return
 	}
 	newID := result[idx+len(prefix):]
