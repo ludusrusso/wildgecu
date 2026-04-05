@@ -282,16 +282,29 @@ func TestSlashCommandCleanResetsSession(t *testing.T) {
 		t.Error("expected old session to be removed after /clean")
 	}
 
-	// Extract new session ID from response and verify it exists.
-	const prefix = "New session: "
-	idx := strings.Index(ev.Content, prefix)
-	if idx < 0 {
-		t.Fatalf("could not find new session ID in response: %q", ev.Content)
+	// The done event must carry the new session ID so clients can update.
+	if ev.SessionID == "" {
+		t.Fatal("expected SessionID in done event for /clean")
 	}
-	newSessionID := ev.Content[idx+len(prefix):]
-	if sm.Get(newSessionID) == nil {
+	if sm.Get(ev.SessionID) == nil {
 		t.Error("expected new session to exist after /clean")
 	}
+}
+
+func TestExtractNewSessionID(t *testing.T) {
+	t.Run("valid result", func(t *testing.T) {
+		got := extractNewSessionID("Session reset. New session: abc-123")
+		if got != "abc-123" {
+			t.Errorf("expected %q, got %q", "abc-123", got)
+		}
+	})
+
+	t.Run("no match", func(t *testing.T) {
+		got := extractNewSessionID("some other message")
+		if got != "" {
+			t.Errorf("expected empty, got %q", got)
+		}
+	})
 }
 
 func TestCommandsList(t *testing.T) {

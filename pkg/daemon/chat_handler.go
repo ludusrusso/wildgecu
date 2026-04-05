@@ -154,7 +154,12 @@ func (s *SocketServer) handleSlashCommand(req *ChatRequest, send func(ChatEvent)
 		send(ChatEvent{Type: "error", Message: err.Error()})
 		return
 	}
-	send(ChatEvent{Type: "done", Content: result})
+	ev := ChatEvent{Type: "done", Content: result}
+	// For session-resetting commands, include the new session ID so clients can update.
+	if name == "clean" {
+		ev.SessionID = extractNewSessionID(result)
+	}
+	send(ev)
 }
 
 func (s *SocketServer) handleSkillCommand(req *ChatRequest, runner command.SkillRunner, send func(ChatEvent), sessions *SessionManager, logger *slog.Logger) {
@@ -195,4 +200,14 @@ func (s *SocketServer) handleChatMessage(req *ChatRequest, send func(ChatEvent),
 		return
 	}
 	send(ChatEvent{Type: "done", Content: content})
+}
+
+// extractNewSessionID parses the new session ID from a /clean result string.
+func extractNewSessionID(result string) string {
+	const prefix = "New session: "
+	idx := strings.Index(result, prefix)
+	if idx < 0 {
+		return ""
+	}
+	return strings.TrimSpace(result[idx+len(prefix):])
 }

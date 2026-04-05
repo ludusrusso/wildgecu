@@ -9,7 +9,8 @@ type streamChunkMsg struct {
 
 // streamDoneMsg signals streaming is complete with the final content.
 type streamDoneMsg struct {
-	content string
+	content   string
+	sessionID string // non-empty when the session was reset (e.g. /clean)
 }
 
 // toolCallMsg is sent when the agent starts executing a tool.

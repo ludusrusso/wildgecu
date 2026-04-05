@@ -240,7 +240,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							prog.p.Send(informMsg{message: event.Content})
 						}
 					case "done":
-						return streamDoneMsg{content: event.Content}
+						return streamDoneMsg{content: event.Content, sessionID: event.SessionID}
 					case "error":
 						return agentErrorMsg{err: errors.New(event.Message)}
 					}
@@ -288,6 +288,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case streamDoneMsg:
 		m.loading = false
 		m.activeToolCall = ""
+		if msg.sessionID != "" {
+			m.sessionID = msg.sessionID
+		}
 		if msg.content != "" {
 			m.display[m.streamIdx] = m.renderMarkdown(msg.content)
 		}
