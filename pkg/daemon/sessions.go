@@ -114,6 +114,25 @@ func (sm *SessionManager) Close(ctx context.Context, id string) {
 }
 
 
+// Reset closes the given session (with finalize) and creates a fresh one.
+func (sm *SessionManager) Reset(ctx context.Context, id string) (*ManagedSession, error) {
+	if sm.Get(id) == nil {
+		return nil, fmt.Errorf("session not found: %s", id)
+	}
+	sm.Close(ctx, id)
+	return sm.Create(), nil
+}
+
+// ResetSession resets a session and returns the new session ID.
+// This satisfies the telegram.SessionProvider interface.
+func (sm *SessionManager) ResetSession(ctx context.Context, id string) (string, error) {
+	sess, err := sm.Reset(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	return sess.ID, nil
+}
+
 // Interrupt cancels the current turn if one is running.
 func (sm *SessionManager) Interrupt(id string) {
 	sess := sm.Get(id)
@@ -144,6 +163,20 @@ type OnInformFunc func(message string)
 // RunTurnStream runs a single conversational turn with streaming callbacks.
 // It locks the session for the duration.
 func (sm *SessionManager) RunTurnStream(ctx context.Context, id, input string, onChunk OnChunkFunc, onToolCall OnToolCallFunc, onInform OnInformFunc) (string, error) {
+	return sm.runTurnInternal(ctx, id, input, "", onChunk, onToolCall, onInform)
+}
+
+// RunSkillTurnStream runs a streaming LLM turn with skill content injected as
+// additional system context. The skill content is appended to the session's
+// system prompt, and userInput becomes the user message.
+func (sm *SessionManager) RunSkillTurnStream(ctx context.Context, id, skillContent, userInput string, onChunk OnChunkFunc, onToolCall OnToolCallFunc, onInform OnInformFunc) (string, error) {
+	return sm.runTurnInternal(ctx, id, userInput, skillContent, onChunk, onToolCall, onInform)
+}
+
+// runTurnInternal is the shared implementation for RunTurnStream and
+// RunSkillTurnStream. When extraSystem is non-empty it is appended to the
+// session's system prompt.
+func (sm *SessionManager) runTurnInternal(ctx context.Context, id, input, extraSystem string, onChunk OnChunkFunc, onToolCall OnToolCallFunc, onInform OnInformFunc) (string, error) {
 	sess := sm.Get(id)
 	if sess == nil {
 		return "", fmt.Errorf("session not found: %s", id)
@@ -169,6 +202,9 @@ func (sm *SessionManager) RunTurnStream(ctx context.Context, id, input string, o
 		baseCfg = sess.cfg
 	}
 	cfg := *baseCfg
+	if extraSystem != "" {
+		cfg.SystemPrompt = cfg.SystemPrompt + "\n\n" + extraSystem
+	}
 	cfg.OnToolCall = func(tc provider.ToolCall) {
 		if onToolCall != nil {
 			onToolCall(tc.Name, formatToolArgs(tc.Args, 100))
@@ -194,6 +230,24 @@ func (sm *SessionManager) RunTurnStream(ctx context.Context, id, input string, o
 
 	sess.Messages = updated
 	return resp.Message.Content, nil
+}
+
+// RunSkillTurnStreamRaw is like RunSkillTurnStream but uses plain function
+// types, making it usable as a telegram.SessionProvider method.
+func (sm *SessionManager) RunSkillTurnStreamRaw(ctx context.Context, id, skillContent, userInput string, onChunk func(string), onToolCall func(string, string), onInform func(string)) (string, error) {
+	var chunkCb OnChunkFunc
+	if onChunk != nil {
+		chunkCb = OnChunkFunc(onChunk)
+	}
+	var toolCb OnToolCallFunc
+	if onToolCall != nil {
+		toolCb = OnToolCallFunc(onToolCall)
+	}
+	var informCb OnInformFunc
+	if onInform != nil {
+		informCb = OnInformFunc(onInform)
+	}
+	return sm.RunSkillTurnStream(ctx, id, skillContent, userInput, chunkCb, toolCb, informCb)
 }
 
 // RunTurnStreamRaw is like RunTurnStream but uses plain function types instead

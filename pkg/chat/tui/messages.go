@@ -1,5 +1,7 @@
 package tui
 
+import "wildgecu/pkg/daemon"
+
 // streamChunkMsg carries a partial text chunk from the streaming response.
 type streamChunkMsg struct {
 	content string
@@ -35,4 +37,9 @@ type sessionErrorMsg struct {
 // informMsg carries a fire-and-forget status message from the agent.
 type informMsg struct {
 	message string
+}
+
+// commandsLoadedMsg carries the command list fetched from the daemon.
+type commandsLoadedMsg struct {
+	commands []daemon.CommandInfo
 }

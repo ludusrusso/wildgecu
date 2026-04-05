@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
+	"wildgecu/pkg/command"
 	"wildgecu/pkg/telegram/auth"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -17,13 +19,25 @@ import (
 type SessionProvider interface {
 	CreateSession() string // returns session ID
 	RunTurnStreamRaw(ctx context.Context, id string, input string, onChunk func(string), onToolCall func(string, string), onInform func(string)) (string, error)
+	RunSkillTurnStreamRaw(ctx context.Context, id, skillContent, userInput string, onChunk func(string), onToolCall func(string, string), onInform func(string)) (string, error)
 	WelcomeText() string
+}
+
+// botAPI abstracts the Telegram Bot API methods used by Bridge, enabling
+// testing without a real bot connection.
+type botAPI interface {
+	Send(c tgbotapi.Chattable) (tgbotapi.Message, error)
+	Request(c tgbotapi.Chattable) (*tgbotapi.APIResponse, error)
+	GetUpdatesChan(config tgbotapi.UpdateConfig) tgbotapi.UpdatesChannel
+	StopReceivingUpdates()
 }
 
 // Bridge connects a Telegram bot to the daemon's session manager.
 type Bridge struct {
-	bot          *tgbotapi.BotAPI
+	bot          botAPI
+	username     string
 	sm           SessionProvider
+	commands     *command.Registry
 	auth         *auth.Store
 	chatSessions map[int64]string // chatID → session ID
 	mu           sync.RWMutex
@@ -31,15 +45,18 @@ type Bridge struct {
 }
 
 // New creates a new Telegram bridge using the given session provider.
-// authStore may be nil to allow all users.
-func New(token string, sm SessionProvider, authStore *auth.Store) (*Bridge, error) {
+// authStore may be nil to allow all users. commands may be nil to disable
+// slash command handling.
+func New(token string, sm SessionProvider, authStore *auth.Store, commands *command.Registry) (*Bridge, error) {
 	bot, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
 		return nil, err
 	}
 	return &Bridge{
 		bot:          bot,
+		username:     bot.Self.UserName,
 		sm:           sm,
+		commands:     commands,
 		auth:         authStore,
 		chatSessions: make(map[int64]string),
 		logger:       slog.Default(),
@@ -48,12 +65,16 @@ func New(token string, sm SessionProvider, authStore *auth.Store) (*Bridge, erro
 
 // Run starts the Telegram update loop. It blocks until ctx is cancelled.
 func (b *Bridge) Run(ctx context.Context) error {
+	if err := b.SyncCommands(); err != nil {
+		b.logger.Warn("failed to sync telegram commands at startup", "error", err)
+	}
+
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 
 	updates := b.bot.GetUpdatesChan(u)
 
-	b.logger.Info("telegram bot started", "username", b.bot.Self.UserName)
+	b.logger.Info("telegram bot started", "username", b.username)
 
 	for {
 		select {
@@ -69,6 +90,14 @@ func (b *Bridge) Run(ctx context.Context) error {
 }
 
 func (b *Bridge) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
+	// Refresh Telegram's native command autocomplete after handling, in case
+	// the agent added or removed skills during this turn.
+	defer func() {
+		if err := b.SyncCommands(); err != nil {
+			b.logger.Debug("failed to sync telegram commands", "error", err)
+		}
+	}()
+
 	chatID := msg.Chat.ID
 
 	// Auth gate: block unauthenticated users before any processing.
@@ -88,6 +117,43 @@ func (b *Bridge) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 	if msg.Text == "/start" {
 		b.sendMessages(chatID, b.sm.WelcomeText())
 		return
+	}
+
+	// Intercept slash commands and route to the command registry.
+	if b.commands != nil && strings.HasPrefix(msg.Text, "/") {
+		name, args := command.Parse(msg.Text)
+		if name != "" {
+			cmd := b.commands.Resolve(name)
+			if cmd == nil {
+				reply := tgbotapi.NewMessage(chatID, fmt.Sprintf("Unknown command: /%s", name))
+				if _, err := b.bot.Send(reply); err != nil {
+					b.logger.Error("telegram send error", "error", err)
+				}
+				return
+			}
+			// Skill commands run a streaming LLM turn.
+			if runner, ok := cmd.(command.SkillRunner); ok {
+				b.handleSkillCommand(ctx, chatID, runner, args)
+				return
+			}
+			// Inject session ID for session-aware commands like /clean.
+			sessionID := b.getOrCreateSession(chatID)
+			cmdCtx := command.WithSessionID(ctx, sessionID)
+			result, err := cmd.Execute(cmdCtx, args)
+			if err != nil {
+				reply := tgbotapi.NewMessage(chatID, fmt.Sprintf("Error: %v", err))
+				if _, err := b.bot.Send(reply); err != nil {
+					b.logger.Error("telegram send error", "error", err)
+				}
+				return
+			}
+			// If the command was /clean, update our chat→session mapping.
+			if name == "clean" {
+				b.updateSessionFromResult(chatID, result)
+			}
+			b.sendMessages(chatID, result)
+			return
+		}
 	}
 
 	sessionID := b.getOrCreateSession(chatID)
@@ -138,6 +204,52 @@ func (b *Bridge) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 	b.sendMessages(chatID, finalContent[4096:])
 }
 
+func (b *Bridge) handleSkillCommand(ctx context.Context, chatID int64, runner command.SkillRunner, userInput string) {
+	sessionID := b.getOrCreateSession(chatID)
+
+	// Send typing indicator
+	if _, err := b.bot.Request(tgbotapi.NewChatAction(chatID, tgbotapi.ChatTyping)); err != nil {
+		b.logger.Error("telegram send chat action error", "error", err)
+	}
+
+	// Send placeholder message
+	placeholder := tgbotapi.NewMessage(chatID, "...")
+	sent, err := b.bot.Send(placeholder)
+	if err != nil {
+		b.logger.Error("telegram send placeholder error", "error", err)
+		return
+	}
+
+	h := &turnHandler{bridge: b, chatID: chatID, msgID: sent.MessageID}
+	finalContent, err := b.sm.RunSkillTurnStreamRaw(ctx, sessionID, runner.SkillContent(), userInput, h.onChunk, h.onToolCall, h.onInform)
+	if err != nil {
+		b.logger.Error("telegram skill command error", "error", err, "chat_id", chatID)
+		edit := tgbotapi.NewEditMessageText(chatID, sent.MessageID, fmt.Sprintf("Error: %v", err))
+		if _, err := b.bot.Send(edit); err != nil {
+			b.logger.Error("telegram edit error message failed", "error", err)
+		}
+		return
+	}
+
+	if finalContent == "" {
+		finalContent = "(empty response)"
+	}
+
+	if len(finalContent) <= 4096 {
+		edit := tgbotapi.NewEditMessageText(chatID, sent.MessageID, finalContent)
+		if _, err := b.bot.Send(edit); err != nil {
+			b.logger.Error("telegram final edit error", "error", err)
+		}
+		return
+	}
+
+	edit := tgbotapi.NewEditMessageText(chatID, sent.MessageID, finalContent[:4096])
+	if _, err := b.bot.Send(edit); err != nil {
+		b.logger.Error("telegram final edit error", "error", err)
+	}
+	b.sendMessages(chatID, finalContent[4096:])
+}
+
 type turnHandler struct {
 	bridge   *Bridge
 	chatID   int64
@@ -176,6 +288,22 @@ func (h *turnHandler) onInform(message string) {
 	if _, err := h.bridge.bot.Request(tgbotapi.NewChatAction(h.chatID, tgbotapi.ChatTyping)); err != nil {
 		h.bridge.logger.Debug("telegram refresh chat action error", "error", err)
 	}
+}
+
+// updateSessionFromResult extracts the new session ID from a /clean result
+// and updates the chat→session mapping.
+func (b *Bridge) updateSessionFromResult(chatID int64, result string) {
+	// The result format is "Session reset. New session: <id>"
+	const prefix = "New session: "
+	idx := strings.Index(result, prefix)
+	if idx < 0 {
+		b.logger.Warn("updateSessionFromResult: could not parse new session ID from /clean result", "result", result)
+		return
+	}
+	newID := result[idx+len(prefix):]
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.chatSessions[chatID] = newID
 }
 
 func (b *Bridge) getOrCreateSession(chatID int64) string {

@@ -60,6 +60,7 @@ type Model struct {
 	textinput      textinput.Model
 	viewport       viewport.Model
 	spinner        spinner.Model
+	autocomplete   *Autocomplete
 	streamIdx      int
 	width          int
 	height         int
@@ -84,16 +85,26 @@ func New(ctx context.Context, client *daemon.Client) Model {
 	sp.Style = spinnerStyle
 
 	return Model{
-		ctx:       ctx,
-		client:    client,
-		textinput: ti,
-		spinner:   sp,
-		program:   &programRef{},
+		ctx:          ctx,
+		client:       client,
+		textinput:    ti,
+		spinner:      sp,
+		program:      &programRef{},
+		autocomplete: NewAutocomplete(nil),
 	}
 }
 
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(textinput.Blink, m.createSession)
+}
+
+// fetchCommands loads the available slash commands from the daemon.
+func (m Model) fetchCommands() tea.Msg {
+	cmds, err := m.client.ListCommands()
+	if err != nil {
+		return commandsLoadedMsg{} // silently ignore; autocomplete just won't work
+	}
+	return commandsLoadedMsg{commands: cmds}
 }
 
 // createSession sends session.create to the daemon.
@@ -118,7 +129,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		vpHeight := m.height - headerHeight - inputHeight - statusHeight - gapLines
+		vpHeight := m.height - headerHeight - inputHeight - statusHeight - gapLines - m.acRows()
 		if vpHeight < 1 {
 			vpHeight = 1
 		}
@@ -136,6 +147,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sessionCreatedMsg:
 		m.sessionID = msg.sessionID
 		m.welcomeText = msg.welcome
+		return m, m.fetchCommands
+
+	case commandsLoadedMsg:
+		m.autocomplete = NewAutocomplete(msg.commands)
 		return m, nil
 
 	case sessionErrorMsg:
@@ -155,6 +170,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				_ = m.client.InterruptSession(m.sessionID)
 			}
 			return m, nil
+		case tea.KeyUp:
+			if !m.loading && m.autocomplete.Visible() {
+				m.autocomplete.MoveUp()
+				return m, nil
+			}
+		case tea.KeyDown:
+			if !m.loading && m.autocomplete.Visible() {
+				m.autocomplete.MoveDown()
+				return m, nil
+			}
+		case tea.KeyTab:
+			if !m.loading && m.autocomplete.Visible() {
+				if result := m.autocomplete.Complete(); result != "" {
+					m.textinput.SetValue(result)
+					m.textinput.CursorEnd()
+					m.autocomplete.Update(result)
+				}
+				return m, nil
+			}
 		case tea.KeyEnter:
 			if m.loading || m.sessionID == "" {
 				return m, nil
@@ -286,9 +320,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.textinput, cmd = m.textinput.Update(msg)
 		cmds = append(cmds, cmd)
+		m.autocomplete.Update(m.textinput.Value())
+		m.resizeViewport()
 	}
 
 	return m, tea.Batch(cmds...)
+}
+
+const maxAutocompleteRows = 8
+
+func (m *Model) acRows() int {
+	if !m.autocomplete.Visible() {
+		return 0
+	}
+	n := len(m.autocomplete.Matches())
+	if n > maxAutocompleteRows {
+		n = maxAutocompleteRows
+	}
+	return n
+}
+
+func (m *Model) resizeViewport() {
+	if !m.ready {
+		return
+	}
+	vpHeight := m.height - headerHeight - inputHeight - statusHeight - gapLines - m.acRows()
+	if vpHeight < 1 {
+		vpHeight = 1
+	}
+	m.viewport.Height = vpHeight
 }
 
 func (m *Model) renderMarkdown(content string) string {
@@ -350,6 +410,22 @@ func (m Model) View() string {
 		}
 	default:
 		b.WriteString(m.textinput.View())
+	}
+
+	// Autocomplete dropdown.
+	if !m.loading && m.autocomplete.Visible() {
+		b.WriteString("\n")
+		for i, cmd := range m.autocomplete.Matches() {
+			if i >= maxAutocompleteRows {
+				break
+			}
+			if i == m.autocomplete.Selected() {
+				b.WriteString(acSelectedStyle.Render("  /" + cmd.Name + " — " + cmd.Description))
+			} else {
+				b.WriteString(acNormalStyle.Render("  /" + cmd.Name + " — " + cmd.Description))
+			}
+			b.WriteString("\n")
+		}
 	}
 
 	b.WriteString("\n")

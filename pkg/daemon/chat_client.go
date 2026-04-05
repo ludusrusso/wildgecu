@@ -8,13 +8,14 @@ import (
 
 // Event is a server→client message over the NDJSON socket.
 type Event struct {
-	Type      string `json:"type"`
-	SessionID string `json:"session_id,omitempty"`
-	Content   string `json:"content,omitempty"`
-	Welcome   string `json:"welcome,omitempty"`
-	Name      string `json:"name,omitempty"`
-	Args      string `json:"args,omitempty"`
-	Message   string `json:"message,omitempty"`
+	Type      string        `json:"type"`
+	SessionID string        `json:"session_id,omitempty"`
+	Content   string        `json:"content,omitempty"`
+	Welcome   string        `json:"welcome,omitempty"`
+	Name      string        `json:"name,omitempty"`
+	Args      string        `json:"args,omitempty"`
+	Message   string        `json:"message,omitempty"`
+	Commands  []CommandInfo `json:"commands,omitempty"`
 }
 
 // request is a client→server message over the NDJSON socket.
@@ -97,6 +98,21 @@ func (c *Client) ReadEvent() (*Event, error) {
 	return &ev, nil
 }
 
+
+// ListCommands asks the daemon for the full list of available slash commands.
+func (c *Client) ListCommands() ([]CommandInfo, error) {
+	if err := c.encoder.Encode(request{Type: "commands.list"}); err != nil {
+		return nil, fmt.Errorf("send commands.list: %w", err)
+	}
+	var ev Event
+	if err := c.decoder.Decode(&ev); err != nil {
+		return nil, fmt.Errorf("read commands.list: %w", err)
+	}
+	if ev.Type == "error" {
+		return nil, fmt.Errorf("commands.list failed: %s", ev.Message)
+	}
+	return ev.Commands, nil
+}
 
 // InterruptSession asks the daemon to interrupt the current turn of the session.
 func (c *Client) InterruptSession(sessionID string) error {
