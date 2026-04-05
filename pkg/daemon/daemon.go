@@ -96,6 +96,20 @@ func Run(ctx context.Context, cfg Config) error {
 		return sm.ResetSession(ctx, id)
 	})
 	cmdRegistry.Register(cleanCmd)
+	statusCmd := command.NewStatusCommand(func(_ context.Context, id string) (command.StatusInfo, error) {
+		sess := sm.Get(id)
+		if sess == nil {
+			return command.StatusInfo{}, fmt.Errorf("session not found: %s", id)
+		}
+		return command.StatusInfo{
+			SessionID:    sess.ID,
+			MessageCount: len(sess.Messages),
+			Provider:     cfg.Provider,
+			Model:        cfg.Model,
+			Uptime:       time.Since(sess.createdAt),
+		}, nil
+	})
+	cmdRegistry.Register(statusCmd)
 	srv.SetCommands(cmdRegistry)
 
 	// --- Cron scheduler (declared early so status handler can access it) ---
