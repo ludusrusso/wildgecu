@@ -1,0 +1,23 @@
+version: 2
+
+builds:
+  - main: .
+    binary: wildgecu
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X wildgecu/cmd.Version={{.Version}}
+      - -X wildgecu/cmd.Commit={{.Commit}}
+      - -X wildgecu/cmd.Date={{.Date}}
+
+archives:
+  - formats:
+      - tar.gz
+    files:
+      - LICENSE
+      - README.md

@@ -13,8 +13,10 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Version is the build version, settable via -ldflags.
+// Version, Commit, and Date are set via -ldflags at build time.
 var Version = "dev"
+var Commit = "none"
+var Date = "unknown"
 
 var cfgFile string
 var debugFlag bool
