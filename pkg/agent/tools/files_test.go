@@ -266,7 +266,7 @@ func TestUpdateFile(t *testing.T) {
 func TestResolvePath(t *testing.T) {
 	t.Run("relative", func(t *testing.T) {
 		got := resolvePath("/work", "sub/file.txt")
-		want := filepath.Join("/work", "sub/file.txt")
+		want := "/work/sub/file.txt"
 		if got != want {
 			t.Fatalf("resolvePath = %q, want %q", got, want)
 		}
