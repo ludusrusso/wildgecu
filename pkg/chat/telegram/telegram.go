@@ -74,7 +74,7 @@ func (b *Bridge) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 	sessionID := b.getOrCreateSession(chatID)
 
 	// Send typing indicator
-	if _, err := b.bot.Send(tgbotapi.NewChatAction(chatID, tgbotapi.ChatTyping)); err != nil {
+	if _, err := b.bot.Request(tgbotapi.NewChatAction(chatID, tgbotapi.ChatTyping)); err != nil {
 		b.logger.Error("telegram send chat action error", "error", err)
 	}
 
@@ -106,7 +106,23 @@ func (b *Bridge) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 		}
 	}
 
-	finalContent, err := b.sm.RunTurnStreamRaw(ctx, sessionID, msg.Text, onChunk, nil, nil)
+	onToolCall := func(name, args string) {
+		b.logger.Info("telegram tool call", "name", name, "args", args)
+	}
+
+	onInform := func(message string) {
+		b.logger.Info("telegram inform", "message", message)
+		inform := tgbotapi.NewMessage(chatID, "ℹ️ "+message)
+		if _, err := b.bot.Send(inform); err != nil {
+			b.logger.Error("telegram inform message error", "error", err)
+		}
+		// Refresh typing indicator as sending a message clears it
+		if _, err := b.bot.Request(tgbotapi.NewChatAction(chatID, tgbotapi.ChatTyping)); err != nil {
+			b.logger.Debug("telegram refresh chat action error", "error", err)
+		}
+	}
+
+	finalContent, err := b.sm.RunTurnStreamRaw(ctx, sessionID, msg.Text, onChunk, onToolCall, onInform)
 	if err != nil {
 		b.logger.Error("telegram turn error", "error", err, "chat_id", chatID)
 		edit := tgbotapi.NewEditMessageText(chatID, sent.MessageID, fmt.Sprintf("Error: %v", err))
