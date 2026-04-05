@@ -101,9 +101,23 @@ func Run(ctx context.Context, cfg Config) error {
 		if sess == nil {
 			return command.StatusInfo{}, fmt.Errorf("session not found: %s", id)
 		}
+		var toolCalls int
+		uniqueSkills := make(map[string]struct{})
+		for _, msg := range sess.Messages {
+			toolCalls += len(msg.ToolCalls)
+			for _, tc := range msg.ToolCalls {
+				if tc.Name == "read_skill" {
+					if name, ok := tc.Args["name"].(string); ok {
+						uniqueSkills[name] = struct{}{}
+					}
+				}
+			}
+		}
 		return command.StatusInfo{
 			SessionID:    sess.ID,
 			MessageCount: len(sess.Messages),
+			ToolCalls:    toolCalls,
+			SkillsLoaded: len(uniqueSkills),
 			Provider:     cfg.Provider,
 			Model:        cfg.Model,
 			Uptime:       time.Since(sess.createdAt),

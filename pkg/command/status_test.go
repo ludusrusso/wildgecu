@@ -14,6 +14,8 @@ func TestStatusCommand(t *testing.T) {
 			return StatusInfo{
 				SessionID:    "sess-abc-123",
 				MessageCount: 42,
+				ToolCalls:    7,
+				SkillsLoaded: 2,
 				Provider:     "openai",
 				Model:        "gpt-4o",
 				Uptime:       3*time.Hour + 15*time.Minute,
@@ -26,7 +28,7 @@ func TestStatusCommand(t *testing.T) {
 			t.Fatalf("Execute() error: %v", err)
 		}
 
-		for _, want := range []string{"sess-abc-123", "42", "openai", "gpt-4o", "3h15m"} {
+		for _, want := range []string{"sess-abc-123", "42", "7", "2", "openai", "gpt-4o", "3h15m"} {
 			if !strings.Contains(result, want) {
 				t.Errorf("expected result to contain %q, got:\n%s", want, result)
 			}

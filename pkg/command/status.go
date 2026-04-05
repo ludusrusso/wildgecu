@@ -10,6 +10,8 @@ import (
 type StatusInfo struct {
 	SessionID    string
 	MessageCount int
+	ToolCalls    int
+	SkillsLoaded int
 	Provider     string
 	Model        string
 	Uptime       time.Duration
@@ -41,7 +43,7 @@ func (c *StatusCommand) Execute(ctx context.Context, _ string) (string, error) {
 		return "", fmt.Errorf("get session status: %w", err)
 	}
 	return fmt.Sprintf(
-		"Session:  %s\nMessages: %d\nProvider: %s\nModel:    %s\nUptime:   %s",
-		info.SessionID, info.MessageCount, info.Provider, info.Model, info.Uptime,
+		"Session:  %s\nMessages: %d\nTools:    %d\nSkills:   %d\nProvider: %s\nModel:    %s\nUptime:   %s",
+		info.SessionID, info.MessageCount, info.ToolCalls, info.SkillsLoaded, info.Provider, info.Model, info.Uptime,
 	), nil
 }
