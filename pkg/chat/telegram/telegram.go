@@ -163,21 +163,22 @@ func (b *Bridge) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 		b.logger.Error("telegram send chat action error", "error", err)
 	}
 
-	// Send placeholder message
-	placeholder := tgbotapi.NewMessage(chatID, "...")
-	sent, err := b.bot.Send(placeholder)
-	if err != nil {
-		b.logger.Error("telegram send placeholder error", "error", err)
-		return
-	}
-
-	h := &turnHandler{bridge: b, chatID: chatID, msgID: sent.MessageID}
+	h := &turnHandler{bridge: b, chatID: chatID}
+	h.startTyping()
 	finalContent, err := b.sm.RunTurnStreamRaw(ctx, sessionID, msg.Text, h.onChunk, h.onToolCall, h.onInform)
+	h.stopTyping()
 	if err != nil {
 		b.logger.Error("telegram turn error", "error", err, "chat_id", chatID)
-		edit := tgbotapi.NewEditMessageText(chatID, sent.MessageID, fmt.Sprintf("Error: %v", err))
-		if _, err := b.bot.Send(edit); err != nil {
-			b.logger.Error("telegram edit error message failed", "error", err)
+		errText := fmt.Sprintf("Error: %v", err)
+		if h.msgID != 0 {
+			edit := tgbotapi.NewEditMessageText(chatID, h.msgID, errText)
+			if _, err := b.bot.Send(edit); err != nil {
+				b.logger.Error("telegram edit error message failed", "error", err)
+			}
+		} else {
+			if _, err := b.bot.Send(tgbotapi.NewMessage(chatID, errText)); err != nil {
+				b.logger.Error("telegram send error message failed", "error", err)
+			}
 		}
 		return
 	}
@@ -187,17 +188,23 @@ func (b *Bridge) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 		finalContent = "(empty response)"
 	}
 
-	// If response fits in one message, edit the placeholder
+	// No message was created yet (no chunks arrived)
+	if h.msgID == 0 {
+		b.sendMessages(chatID, finalContent)
+		return
+	}
+
+	// If response fits in one message, edit the existing message
 	if len(finalContent) <= 4096 {
-		edit := tgbotapi.NewEditMessageText(chatID, sent.MessageID, finalContent)
+		edit := tgbotapi.NewEditMessageText(chatID, h.msgID, finalContent)
 		if _, err := b.bot.Send(edit); err != nil {
 			b.logger.Error("telegram final edit error", "error", err)
 		}
 		return
 	}
 
-	// Long response: edit placeholder with first chunk, send rest as new messages
-	edit := tgbotapi.NewEditMessageText(chatID, sent.MessageID, finalContent[:4096])
+	// Long response: edit with first chunk, send rest as new messages
+	edit := tgbotapi.NewEditMessageText(chatID, h.msgID, finalContent[:4096])
 	if _, err := b.bot.Send(edit); err != nil {
 		b.logger.Error("telegram final edit error", "error", err)
 	}
@@ -212,21 +219,22 @@ func (b *Bridge) handleSkillCommand(ctx context.Context, chatID int64, runner co
 		b.logger.Error("telegram send chat action error", "error", err)
 	}
 
-	// Send placeholder message
-	placeholder := tgbotapi.NewMessage(chatID, "...")
-	sent, err := b.bot.Send(placeholder)
-	if err != nil {
-		b.logger.Error("telegram send placeholder error", "error", err)
-		return
-	}
-
-	h := &turnHandler{bridge: b, chatID: chatID, msgID: sent.MessageID}
+	h := &turnHandler{bridge: b, chatID: chatID}
+	h.startTyping()
 	finalContent, err := b.sm.RunSkillTurnStreamRaw(ctx, sessionID, runner.SkillContent(), userInput, h.onChunk, h.onToolCall, h.onInform)
+	h.stopTyping()
 	if err != nil {
 		b.logger.Error("telegram skill command error", "error", err, "chat_id", chatID)
-		edit := tgbotapi.NewEditMessageText(chatID, sent.MessageID, fmt.Sprintf("Error: %v", err))
-		if _, err := b.bot.Send(edit); err != nil {
-			b.logger.Error("telegram edit error message failed", "error", err)
+		errText := fmt.Sprintf("Error: %v", err)
+		if h.msgID != 0 {
+			edit := tgbotapi.NewEditMessageText(chatID, h.msgID, errText)
+			if _, err := b.bot.Send(edit); err != nil {
+				b.logger.Error("telegram edit error message failed", "error", err)
+			}
+		} else {
+			if _, err := b.bot.Send(tgbotapi.NewMessage(chatID, errText)); err != nil {
+				b.logger.Error("telegram send error message failed", "error", err)
+			}
 		}
 		return
 	}
@@ -235,15 +243,20 @@ func (b *Bridge) handleSkillCommand(ctx context.Context, chatID int64, runner co
 		finalContent = "(empty response)"
 	}
 
+	if h.msgID == 0 {
+		b.sendMessages(chatID, finalContent)
+		return
+	}
+
 	if len(finalContent) <= 4096 {
-		edit := tgbotapi.NewEditMessageText(chatID, sent.MessageID, finalContent)
+		edit := tgbotapi.NewEditMessageText(chatID, h.msgID, finalContent)
 		if _, err := b.bot.Send(edit); err != nil {
 			b.logger.Error("telegram final edit error", "error", err)
 		}
 		return
 	}
 
-	edit := tgbotapi.NewEditMessageText(chatID, sent.MessageID, finalContent[:4096])
+	edit := tgbotapi.NewEditMessageText(chatID, h.msgID, finalContent[:4096])
 	if _, err := b.bot.Send(edit); err != nil {
 		b.logger.Error("telegram final edit error", "error", err)
 	}
@@ -251,18 +264,61 @@ func (b *Bridge) handleSkillCommand(ctx context.Context, chatID int64, runner co
 }
 
 type turnHandler struct {
-	bridge   *Bridge
-	chatID   int64
-	msgID    int
-	mu       sync.Mutex
-	content  string
-	lastEdit time.Time
+	bridge     *Bridge
+	chatID     int64
+	msgID      int // 0 until first chunk creates the message
+	mu         sync.Mutex
+	content    string
+	lastEdit   time.Time
+	typingDone chan struct{}
+}
+
+func (h *turnHandler) startTyping() {
+	h.typingDone = make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(4 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-h.typingDone:
+				return
+			case <-ticker.C:
+				if _, err := h.bridge.bot.Request(tgbotapi.NewChatAction(h.chatID, tgbotapi.ChatTyping)); err != nil {
+					h.bridge.logger.Debug("telegram typing ticker error", "error", err)
+				}
+			}
+		}
+	}()
+}
+
+func (h *turnHandler) stopTyping() {
+	select {
+	case <-h.typingDone:
+	default:
+		close(h.typingDone)
+	}
 }
 
 func (h *turnHandler) onChunk(chunk string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.content += chunk
+
+	// First chunk: create the message and stop the typing indicator.
+	if h.msgID == 0 && h.content != "" {
+		h.stopTyping()
+		text := truncate(h.content, 4000)
+		msg := tgbotapi.NewMessage(h.chatID, text)
+		sent, err := h.bridge.bot.Send(msg)
+		if err != nil {
+			h.bridge.logger.Error("telegram send first chunk error", "error", err)
+			return
+		}
+		h.msgID = sent.MessageID
+		h.lastEdit = time.Now()
+		return
+	}
+
 	now := time.Now()
 	if now.Sub(h.lastEdit) > time.Second && h.content != "" {
 		text := truncate(h.content, 4000)
