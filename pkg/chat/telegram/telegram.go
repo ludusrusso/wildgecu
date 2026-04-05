@@ -7,8 +7,9 @@ import (
 	"sync"
 	"time"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"wildgecu/pkg/telegram/auth"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 // SessionProvider abstracts the daemon's SessionManager so that the telegram
@@ -104,43 +105,8 @@ func (b *Bridge) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 		return
 	}
 
-	// Stream with throttled edits
-	var mu sync.Mutex
-	var content string
-	lastEdit := time.Time{}
-
-	onChunk := func(chunk string) {
-		mu.Lock()
-		defer mu.Unlock()
-		content += chunk
-		now := time.Now()
-		if now.Sub(lastEdit) > time.Second && content != "" {
-			text := truncate(content, 4000)
-			edit := tgbotapi.NewEditMessageText(chatID, sent.MessageID, text)
-			if _, editErr := b.bot.Send(edit); editErr != nil {
-				b.logger.Error("telegram edit message error", "error", editErr)
-			}
-			lastEdit = now
-		}
-	}
-
-	onToolCall := func(name, args string) {
-		b.logger.Info("telegram tool call", "name", name, "args", args)
-	}
-
-	onInform := func(message string) {
-		b.logger.Info("telegram inform", "message", message)
-		inform := tgbotapi.NewMessage(chatID, "ℹ️ "+message)
-		if _, sendErr := b.bot.Send(inform); sendErr != nil {
-			b.logger.Error("telegram inform message error", "error", sendErr)
-		}
-		// Refresh typing indicator as sending a message clears it
-		if _, actErr := b.bot.Request(tgbotapi.NewChatAction(chatID, tgbotapi.ChatTyping)); actErr != nil {
-			b.logger.Debug("telegram refresh chat action error", "error", actErr)
-		}
-	}
-
-	finalContent, err := b.sm.RunTurnStreamRaw(ctx, sessionID, msg.Text, onChunk, onToolCall, onInform)
+	h := &turnHandler{bridge: b, chatID: chatID, msgID: sent.MessageID}
+	finalContent, err := b.sm.RunTurnStreamRaw(ctx, sessionID, msg.Text, h.onChunk, h.onToolCall, h.onInform)
 	if err != nil {
 		b.logger.Error("telegram turn error", "error", err, "chat_id", chatID)
 		edit := tgbotapi.NewEditMessageText(chatID, sent.MessageID, fmt.Sprintf("Error: %v", err))
@@ -170,6 +136,46 @@ func (b *Bridge) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 		b.logger.Error("telegram final edit error", "error", err)
 	}
 	b.sendMessages(chatID, finalContent[4096:])
+}
+
+type turnHandler struct {
+	bridge   *Bridge
+	chatID   int64
+	msgID    int
+	mu       sync.Mutex
+	content  string
+	lastEdit time.Time
+}
+
+func (h *turnHandler) onChunk(chunk string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.content += chunk
+	now := time.Now()
+	if now.Sub(h.lastEdit) > time.Second && h.content != "" {
+		text := truncate(h.content, 4000)
+		edit := tgbotapi.NewEditMessageText(h.chatID, h.msgID, text)
+		if _, err := h.bridge.bot.Send(edit); err != nil {
+			h.bridge.logger.Error("telegram edit message error", "error", err)
+		}
+		h.lastEdit = now
+	}
+}
+
+func (h *turnHandler) onToolCall(name, args string) {
+	h.bridge.logger.Info("telegram tool call", "name", name, "args", args)
+}
+
+func (h *turnHandler) onInform(message string) {
+	h.bridge.logger.Info("telegram inform", "message", message)
+	inform := tgbotapi.NewMessage(h.chatID, "ℹ️ "+message)
+	if _, err := h.bridge.bot.Send(inform); err != nil {
+		h.bridge.logger.Error("telegram inform message error", "error", err)
+	}
+	// Refresh typing indicator as sending a message clears it
+	if _, err := h.bridge.bot.Request(tgbotapi.NewChatAction(h.chatID, tgbotapi.ChatTyping)); err != nil {
+		h.bridge.logger.Debug("telegram refresh chat action error", "error", err)
+	}
 }
 
 func (b *Bridge) getOrCreateSession(chatID int64) string {

@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "make lint 2>&1 || true",
+            "command": "make lint",
             "timeout": 120,
             "statusMessage": "Running linter..."
           }
