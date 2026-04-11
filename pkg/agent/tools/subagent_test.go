@@ -72,6 +72,9 @@ func TestSubagentTools(t *testing.T) {
 		if _, found := props["tools"]; !found {
 			t.Error("expected tools in properties")
 		}
+		if _, found := props["name"]; !found {
+			t.Error("expected name in properties")
+		}
 
 		required, hasReq := params["required"].([]any)
 		if !hasReq {
@@ -371,6 +374,268 @@ func TestSpawnAgent(t *testing.T) {
 		}
 		if out.Result != "final answer" {
 			t.Errorf("expected %q, got %q", "final answer", out.Result)
+		}
+	})
+
+	t.Run("propagates tool call callback with agent=subagent", func(t *testing.T) {
+		// Create a provider that makes a tool call, then returns text.
+		var callNum int
+		childProvider := &funcProvider{fn: func(_ context.Context, params *provider.GenerateParams) (*provider.Response, error) {
+			callNum++
+			if callNum == 1 {
+				return &provider.Response{
+					Message: provider.Message{
+						Role: provider.RoleModel,
+						ToolCalls: []provider.ToolCall{
+							{Name: "dummy_tool", ID: "t1", Args: map[string]any{"key": "val"}},
+						},
+					},
+				}, nil
+			}
+			return &provider.Response{
+				Message: provider.Message{Role: provider.RoleModel, Content: "done"},
+			}, nil
+		}}
+
+		dummyTool := tool.NewTool("dummy_tool", "A dummy tool",
+			func(ctx context.Context, in struct {
+				Key string `json:"key"`
+			}) (struct{}, error) {
+				return struct{}{}, nil
+			},
+		)
+		reg := tool.NewRegistry(dummyTool)
+		tl := SubagentTools(childProvider, reg, nil)[0]
+
+		// Set parent callback in context.
+		type callRecord struct {
+			name, args, agent string
+		}
+		var recorded []callRecord
+		ctx := provider.WithToolCallCallback(context.Background(), func(name, args, agent string) {
+			recorded = append(recorded, callRecord{name, args, agent})
+		})
+
+		_, err := tl.Execute(ctx, map[string]any{"prompt": "do it"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(recorded) != 1 {
+			t.Fatalf("expected 1 callback invocation, got %d", len(recorded))
+		}
+		if recorded[0].name != "dummy_tool" {
+			t.Errorf("name = %q, want %q", recorded[0].name, "dummy_tool")
+		}
+		if recorded[0].agent != "subagent" {
+			t.Errorf("agent = %q, want %q", recorded[0].agent, "subagent")
+		}
+	})
+
+	t.Run("propagates custom name through callback", func(t *testing.T) {
+		var callNum int
+		childProvider := &funcProvider{fn: func(_ context.Context, params *provider.GenerateParams) (*provider.Response, error) {
+			callNum++
+			if callNum == 1 {
+				return &provider.Response{
+					Message: provider.Message{
+						Role: provider.RoleModel,
+						ToolCalls: []provider.ToolCall{
+							{Name: "dummy_tool", ID: "t1", Args: map[string]any{"key": "val"}},
+						},
+					},
+				}, nil
+			}
+			return &provider.Response{
+				Message: provider.Message{Role: provider.RoleModel, Content: "done"},
+			}, nil
+		}}
+
+		dummyTool := tool.NewTool("dummy_tool", "A dummy tool",
+			func(ctx context.Context, in struct {
+				Key string `json:"key"`
+			}) (struct{}, error) {
+				return struct{}{}, nil
+			},
+		)
+		reg := tool.NewRegistry(dummyTool)
+		tl := SubagentTools(childProvider, reg, nil)[0]
+
+		type callRecord struct {
+			name, args, agent string
+		}
+		var recorded []callRecord
+		ctx := provider.WithToolCallCallback(context.Background(), func(name, args, agent string) {
+			recorded = append(recorded, callRecord{name, args, agent})
+		})
+
+		_, err := tl.Execute(ctx, map[string]any{"prompt": "do it", "name": "researcher"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(recorded) != 1 {
+			t.Fatalf("expected 1 callback invocation, got %d", len(recorded))
+		}
+		if recorded[0].agent != "researcher" {
+			t.Errorf("agent = %q, want %q", recorded[0].agent, "researcher")
+		}
+	})
+
+	t.Run("defaults to subagent when name is omitted", func(t *testing.T) {
+		var callNum int
+		childProvider := &funcProvider{fn: func(_ context.Context, params *provider.GenerateParams) (*provider.Response, error) {
+			callNum++
+			if callNum == 1 {
+				return &provider.Response{
+					Message: provider.Message{
+						Role: provider.RoleModel,
+						ToolCalls: []provider.ToolCall{
+							{Name: "dummy_tool", ID: "t1", Args: map[string]any{"key": "val"}},
+						},
+					},
+				}, nil
+			}
+			return &provider.Response{
+				Message: provider.Message{Role: provider.RoleModel, Content: "done"},
+			}, nil
+		}}
+
+		dummyTool := tool.NewTool("dummy_tool", "A dummy tool",
+			func(ctx context.Context, in struct {
+				Key string `json:"key"`
+			}) (struct{}, error) {
+				return struct{}{}, nil
+			},
+		)
+		reg := tool.NewRegistry(dummyTool)
+		tl := SubagentTools(childProvider, reg, nil)[0]
+
+		type callRecord struct {
+			name, args, agent string
+		}
+		var recorded []callRecord
+		ctx := provider.WithToolCallCallback(context.Background(), func(name, args, agent string) {
+			recorded = append(recorded, callRecord{name, args, agent})
+		})
+
+		_, err := tl.Execute(ctx, map[string]any{"prompt": "do it"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(recorded) != 1 {
+			t.Fatalf("expected 1 callback invocation, got %d", len(recorded))
+		}
+		if recorded[0].agent != "subagent" {
+			t.Errorf("agent = %q, want %q", recorded[0].agent, "subagent")
+		}
+	})
+
+	t.Run("runs without error when no parent callback in context", func(t *testing.T) {
+		mp := newMockProvider("ok")
+		reg := tool.NewRegistry()
+		tl := SubagentTools(mp, reg, nil)[0]
+
+		// Use bare context without any callback set.
+		_, err := tl.Execute(context.Background(), map[string]any{
+			"prompt": "hello",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("concurrent subagents with different names show correct labels", func(t *testing.T) {
+		// Each child provider invokes a tool, so the parent callback fires
+		// with the correct agent name for each subagent.
+		child := &funcProvider{fn: func(_ context.Context, params *provider.GenerateParams) (*provider.Response, error) {
+			// First call: invoke dummy_tool; second call: return text.
+			if len(params.Messages) == 1 {
+				return &provider.Response{
+					Message: provider.Message{
+						Role: provider.RoleModel,
+						ToolCalls: []provider.ToolCall{
+							{Name: "dummy_tool", ID: "t1", Args: map[string]any{}},
+						},
+					},
+				}, nil
+			}
+			return &provider.Response{
+				Message: provider.Message{Role: provider.RoleModel, Content: "done"},
+			}, nil
+		}}
+
+		dummyTool := tool.NewTool("dummy_tool", "A dummy tool",
+			func(ctx context.Context, in struct{}) (struct{}, error) {
+				return struct{}{}, nil
+			},
+		)
+		reg := tool.NewRegistry(dummyTool)
+		reg.Add(SubagentTools(child, reg, nil))
+
+		// Parent provider issues 3 spawn_agent calls with different names.
+		var parentCall int
+		parent := &funcProvider{fn: func(_ context.Context, _ *provider.GenerateParams) (*provider.Response, error) {
+			parentCall++
+			if parentCall == 1 {
+				return &provider.Response{
+					Message: provider.Message{
+						Role: provider.RoleModel,
+						ToolCalls: []provider.ToolCall{
+							{Name: "spawn_agent", ID: "a", Args: map[string]any{"prompt": "task 0", "name": "researcher"}},
+							{Name: "spawn_agent", ID: "b", Args: map[string]any{"prompt": "task 1", "name": "summarizer"}},
+							{Name: "spawn_agent", ID: "c", Args: map[string]any{"prompt": "task 2"}},
+						},
+					},
+				}, nil
+			}
+			return &provider.Response{
+				Message: provider.Message{Role: provider.RoleModel, Content: "all done"},
+			}, nil
+		}}
+
+		type callRecord struct {
+			name, agent string
+		}
+		var mu sync.Mutex
+		var recorded []callRecord
+		onToolCall := func(name, args, agent string) {
+			mu.Lock()
+			recorded = append(recorded, callRecord{name, agent})
+			mu.Unlock()
+		}
+
+		ctx := provider.WithToolCallCallback(context.Background(), onToolCall)
+		_, _, err := provider.RunAgentLoop(
+			ctx, parent, "sys",
+			[]provider.Message{{Role: provider.RoleUser, Content: "run tasks"}},
+			reg.Tools(), reg.Executor(), onToolCall, nil,
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Collect agent labels from callback records for dummy_tool calls
+		// (spawn_agent itself also fires callbacks, filter to child tool calls).
+		mu.Lock()
+		defer mu.Unlock()
+
+		agentNames := map[string]bool{}
+		for _, r := range recorded {
+			if r.name == "dummy_tool" {
+				agentNames[r.agent] = true
+			}
+		}
+
+		if !agentNames["researcher"] {
+			t.Error("expected callback with agent=researcher")
+		}
+		if !agentNames["summarizer"] {
+			t.Error("expected callback with agent=summarizer")
+		}
+		if !agentNames["subagent"] {
+			t.Error("expected callback with agent=subagent (default for unnamed)")
 		}
 	})
 

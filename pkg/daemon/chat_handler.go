@@ -35,6 +35,7 @@ type ChatEvent struct {
 	Welcome   string        `json:"welcome,omitempty"`
 	Name      string        `json:"name,omitempty"`
 	Args      string        `json:"args,omitempty"`
+	Agent     string        `json:"agent,omitempty"`
 	Message   string        `json:"message,omitempty"`
 	Commands  []CommandInfo `json:"commands,omitempty"`
 }
@@ -181,8 +182,8 @@ func (s *SocketServer) handleSkillCommand(req *ChatRequest, runner command.Skill
 	onChunk := func(chunk string) {
 		send(ChatEvent{Type: "chunk", Content: chunk})
 	}
-	onToolCall := func(name string, args string) {
-		send(ChatEvent{Type: "tool_call", Name: name, Args: args})
+	onToolCall := func(name, args, agent string) {
+		send(ChatEvent{Type: "tool_call", Name: name, Args: args, Agent: agent})
 	}
 	onInform := func(message string) {
 		send(ChatEvent{Type: "inform", Content: message})
@@ -201,8 +202,8 @@ func (s *SocketServer) handleChatMessage(req *ChatRequest, send func(ChatEvent),
 	onChunk := func(chunk string) {
 		send(ChatEvent{Type: "chunk", Content: chunk})
 	}
-	onToolCall := func(name string, args string) {
-		send(ChatEvent{Type: "tool_call", Name: name, Args: args})
+	onToolCall := func(name, args, agent string) {
+		send(ChatEvent{Type: "tool_call", Name: name, Args: args, Agent: agent})
 	}
 	onInform := func(message string) {
 		send(ChatEvent{Type: "inform", Content: message})

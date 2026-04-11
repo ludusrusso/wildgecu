@@ -91,3 +91,22 @@ func GetInformFunc(ctx context.Context) InformFunc {
 	fn, _ := ctx.Value(informKey).(InformFunc)
 	return fn
 }
+
+// ToolCallCallback is invoked before each tool execution with the tool name,
+// formatted arguments, and an optional agent label (empty for the parent agent).
+type ToolCallCallback func(name, args, agent string)
+
+type toolCallCallbackKeyType struct{}
+
+var toolCallCallbackKey = toolCallCallbackKeyType{}
+
+// WithToolCallCallback returns a context carrying the given ToolCallCallback.
+func WithToolCallCallback(ctx context.Context, fn ToolCallCallback) context.Context {
+	return context.WithValue(ctx, toolCallCallbackKey, fn)
+}
+
+// GetToolCallCallback extracts the ToolCallCallback from the context, or nil.
+func GetToolCallCallback(ctx context.Context) ToolCallCallback {
+	fn, _ := ctx.Value(toolCallCallbackKey).(ToolCallCallback)
+	return fn
+}

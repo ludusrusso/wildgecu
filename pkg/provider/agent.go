@@ -17,11 +17,12 @@ var ErrDone = errors.New("agent loop done")
 // It returns the tool result string. Return ErrDone to stop the loop early.
 type ToolExecutor func(ctx context.Context, tc ToolCall) (string, error)
 
-// ToolCallCallback is invoked before each tool execution with the full ToolCall.
-type ToolCallCallback func(tc ToolCall)
-
 // RunAgentLoopStream is like RunAgentLoop but streams the final text response.
 func RunAgentLoopStream(ctx context.Context, p Provider, systemPrompt string, messages []Message, tools []Tool, execute ToolExecutor, onChunk StreamCallback, onToolCall ToolCallCallback, dbg *debug.Logger) ([]Message, *Response, error) {
+	if onToolCall != nil {
+		ctx = WithToolCallCallback(ctx, onToolCall)
+	}
+
 	sp, canStream := p.(StreamProvider)
 	if !canStream {
 		return RunAgentLoop(ctx, p, systemPrompt, messages, tools, execute, onToolCall, dbg)
@@ -81,6 +82,10 @@ func RunAgentLoopStream(ctx context.Context, p Provider, systemPrompt string, me
 // RunAgentLoop runs the generate-execute cycle until the model produces
 // a text response (no tool calls) or the executor signals ErrDone.
 func RunAgentLoop(ctx context.Context, p Provider, systemPrompt string, messages []Message, tools []Tool, execute ToolExecutor, onToolCall ToolCallCallback, dbg *debug.Logger) ([]Message, *Response, error) {
+	if onToolCall != nil {
+		ctx = WithToolCallCallback(ctx, onToolCall)
+	}
+
 	for {
 		dbg.GenerateRequest(len(messages), len(tools))
 
@@ -144,7 +149,7 @@ func executeToolsParallel(ctx context.Context, toolCalls []ToolCall, execute Too
 func executeOne(ctx context.Context, tc ToolCall, execute ToolExecutor, onToolCall ToolCallCallback, dbg *debug.Logger) (Message, error) {
 	dbg.ToolCall(tc.Name, tc.Args)
 	if onToolCall != nil {
-		onToolCall(tc)
+		onToolCall(tc.Name, FormatToolArgs(tc.Args, 100), "")
 	}
 
 	result, err := execute(ctx, tc)
@@ -162,4 +167,26 @@ func executeOne(ctx context.Context, tc ToolCall, execute ToolExecutor, onToolCa
 		Content:    result,
 		ToolCallID: tc.ID,
 	}, err
+}
+
+// FormatToolArgs formats a tool call's args map into a compact string.
+func FormatToolArgs(args map[string]any, maxLen int) string {
+	if len(args) == 0 {
+		return ""
+	}
+	var parts []string
+	for k, v := range args {
+		parts = append(parts, fmt.Sprintf("%s: %v", k, v))
+	}
+	result := ""
+	for i, p := range parts {
+		if i > 0 {
+			result += ", "
+		}
+		result += p
+	}
+	if len(result) > maxLen {
+		result = result[:maxLen] + "..."
+	}
+	return result
 }

@@ -18,8 +18,8 @@ import (
 // package does not depend on internal/daemon.
 type SessionProvider interface {
 	CreateSession() string // returns session ID
-	RunTurnStreamRaw(ctx context.Context, id string, input string, onChunk func(string), onToolCall func(string, string), onInform func(string)) (string, error)
-	RunSkillTurnStreamRaw(ctx context.Context, id, skillContent, userInput string, onChunk func(string), onToolCall func(string, string), onInform func(string)) (string, error)
+	RunTurnStreamRaw(ctx context.Context, id string, input string, onChunk func(string), onToolCall func(string, string, string), onInform func(string)) (string, error)
+	RunSkillTurnStreamRaw(ctx context.Context, id, skillContent, userInput string, onChunk func(string), onToolCall func(string, string, string), onInform func(string)) (string, error)
 	WelcomeText() string
 }
 
@@ -330,8 +330,8 @@ func (h *turnHandler) onChunk(chunk string) {
 	}
 }
 
-func (h *turnHandler) onToolCall(name, args string) {
-	h.bridge.logger.Info("telegram tool call", "name", name, "args", args)
+func (h *turnHandler) onToolCall(name, args, agent string) {
+	h.bridge.logger.Info("telegram tool call", "name", name, "args", args, "agent", agent)
 }
 
 func (h *turnHandler) onInform(message string) {

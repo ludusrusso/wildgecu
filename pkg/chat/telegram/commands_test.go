@@ -124,10 +124,10 @@ func (m *mockBot) StopReceivingUpdates() {}
 type stubSession struct{}
 
 func (s *stubSession) CreateSession() string { return "test-session" }
-func (s *stubSession) RunTurnStreamRaw(_ context.Context, _, _ string, _ func(string), _ func(string, string), _ func(string)) (string, error) {
+func (s *stubSession) RunTurnStreamRaw(_ context.Context, _, _ string, _ func(string), _ func(string, string, string), _ func(string)) (string, error) {
 	return "ok", nil
 }
-func (s *stubSession) RunSkillTurnStreamRaw(_ context.Context, _, _, _ string, _ func(string), _ func(string, string), _ func(string)) (string, error) {
+func (s *stubSession) RunSkillTurnStreamRaw(_ context.Context, _, _, _ string, _ func(string), _ func(string, string, string), _ func(string)) (string, error) {
 	return "ok", nil
 }
 func (s *stubSession) WelcomeText() string { return "welcome" }

@@ -208,7 +208,8 @@ func (sm *SessionManager) WelcomeText() string {
 type OnChunkFunc func(chunk string)
 
 // OnToolCallFunc is called when the agent invokes a tool.
-type OnToolCallFunc func(name string, args string)
+// The agent parameter identifies the source (empty for the parent agent).
+type OnToolCallFunc func(name, args, agent string)
 
 // OnInformFunc is called when the agent sends a status message to the user.
 type OnInformFunc func(message string)
@@ -258,10 +259,8 @@ func (sm *SessionManager) runTurnInternal(ctx context.Context, id, input, extraS
 	if extraSystem != "" {
 		cfg.SystemPrompt = cfg.SystemPrompt + "\n\n" + extraSystem
 	}
-	cfg.OnToolCall = func(tc provider.ToolCall) {
-		if onToolCall != nil {
-			onToolCall(tc.Name, formatToolArgs(tc.Args, 100))
-		}
+	if onToolCall != nil {
+		cfg.OnToolCall = provider.ToolCallCallback(onToolCall)
 	}
 
 	chunkCb := func(chunk string) {
@@ -287,7 +286,7 @@ func (sm *SessionManager) runTurnInternal(ctx context.Context, id, input, extraS
 
 // RunSkillTurnStreamRaw is like RunSkillTurnStream but uses plain function
 // types, making it usable as a telegram.SessionProvider method.
-func (sm *SessionManager) RunSkillTurnStreamRaw(ctx context.Context, id, skillContent, userInput string, onChunk func(string), onToolCall func(string, string), onInform func(string)) (string, error) {
+func (sm *SessionManager) RunSkillTurnStreamRaw(ctx context.Context, id, skillContent, userInput string, onChunk func(string), onToolCall func(string, string, string), onInform func(string)) (string, error) {
 	var chunkCb OnChunkFunc
 	if onChunk != nil {
 		chunkCb = OnChunkFunc(onChunk)
@@ -305,7 +304,7 @@ func (sm *SessionManager) RunSkillTurnStreamRaw(ctx context.Context, id, skillCo
 
 // RunTurnStreamRaw is like RunTurnStream but uses plain function types instead
 // of named callback types, making it usable as a telegram.SessionProvider method.
-func (sm *SessionManager) RunTurnStreamRaw(ctx context.Context, id, input string, onChunk func(string), onToolCall func(string, string), onInform func(string)) (string, error) {
+func (sm *SessionManager) RunTurnStreamRaw(ctx context.Context, id, input string, onChunk func(string), onToolCall func(string, string, string), onInform func(string)) (string, error) {
 	var chunkCb OnChunkFunc
 	if onChunk != nil {
 		chunkCb = OnChunkFunc(onChunk)
@@ -321,24 +320,3 @@ func (sm *SessionManager) RunTurnStreamRaw(ctx context.Context, id, input string
 	return sm.RunTurnStream(ctx, id, input, chunkCb, toolCb, informCb)
 }
 
-// formatToolArgs formats a tool call's args map into a compact string.
-func formatToolArgs(args map[string]any, maxLen int) string {
-	if len(args) == 0 {
-		return ""
-	}
-	var parts []string
-	for k, v := range args {
-		parts = append(parts, fmt.Sprintf("%s: %v", k, v))
-	}
-	result := ""
-	for i, p := range parts {
-		if i > 0 {
-			result += ", "
-		}
-		result += p
-	}
-	if len(result) > maxLen {
-		result = result[:maxLen] + "..."
-	}
-	return result
-}

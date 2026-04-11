@@ -15,8 +15,9 @@ type streamDoneMsg struct {
 
 // toolCallMsg is sent when the agent starts executing a tool.
 type toolCallMsg struct {
-	name string
-	args string
+	name  string
+	args  string
+	agent string
 }
 
 // agentErrorMsg is sent when the agent encounters an error.

@@ -228,13 +228,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					case "tool_call":
 						if prog.p != nil {
-							args := event.Args
-							label := event.Name
-							if args != "" {
-								label += "(" + args + ")"
-							}
-							prog.p.Send(toolCallMsg{name: event.Name, args: args})
-							_ = label
+							prog.p.Send(toolCallMsg{name: event.Name, args: event.Args, agent: event.Agent})
 						}
 					case "inform":
 						if prog.p != nil {
@@ -267,11 +261,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case toolCallMsg:
 		m.activeToolCall = msg.name
+		if msg.agent != "" {
+			m.activeToolCall = msg.name + " (" + msg.agent + ")"
+		}
 		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(thinkingVerbs))))
 		m.thinkingIdx = int(n.Int64())
 		label := msg.name
 		if msg.args != "" {
 			label += "(" + msg.args + ")"
+		}
+		if msg.agent != "" {
+			label = "[" + msg.agent + "] " + label
 		}
 		m.appendDisplay(toolStyle.Render("⚡ " + label))
 		return m, nil

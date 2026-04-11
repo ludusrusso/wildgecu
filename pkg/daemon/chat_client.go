@@ -14,6 +14,7 @@ type Event struct {
 	Welcome   string        `json:"welcome,omitempty"`
 	Name      string        `json:"name,omitempty"`
 	Args      string        `json:"args,omitempty"`
+	Agent     string        `json:"agent,omitempty"`
 	Message   string        `json:"message,omitempty"`
 	Commands  []CommandInfo `json:"commands,omitempty"`
 }

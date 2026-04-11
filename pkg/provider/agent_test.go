@@ -148,9 +148,9 @@ func TestExecuteToolsParallel(t *testing.T) {
 		}
 
 		var callbackCount atomic.Int32
-		callback := func(tc ToolCall) {
+		callback := ToolCallCallback(func(name, args, agent string) {
 			callbackCount.Add(1)
-		}
+		})
 
 		executor := func(ctx context.Context, tc ToolCall) (string, error) {
 			return "ok", nil
