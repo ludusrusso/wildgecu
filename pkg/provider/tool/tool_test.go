@@ -244,4 +244,154 @@ func TestRegistry(t *testing.T) {
 			t.Fatalf("unexpected result: %s", result)
 		}
 	})
+
+	t.Run("SubsetHappyPath", func(t *testing.T) {
+		alpha := NewTool("alpha", "first tool",
+			func(ctx context.Context, in EchoInput) (EchoOutput, error) {
+				return EchoOutput{Echo: "alpha:" + in.Message}, nil
+			},
+		)
+		beta := NewTool("beta", "second tool",
+			func(ctx context.Context, in EchoInput) (EchoOutput, error) {
+				return EchoOutput{Echo: "beta:" + in.Message}, nil
+			},
+		)
+		gamma := NewTool("gamma", "third tool",
+			func(ctx context.Context, in EchoInput) (EchoOutput, error) {
+				return EchoOutput{Echo: "gamma:" + in.Message}, nil
+			},
+		)
+
+		reg := NewRegistry(alpha, beta, gamma)
+		sub := reg.Subset([]string{"gamma", "alpha"})
+
+		tools := sub.Tools()
+		if len(tools) != 2 {
+			t.Fatalf("expected 2 tools, got %d", len(tools))
+		}
+		// Insertion order from original registry: alpha before gamma
+		if tools[0].Name != "alpha" {
+			t.Fatalf("tools[0] = %q, want alpha", tools[0].Name)
+		}
+		if tools[1].Name != "gamma" {
+			t.Fatalf("tools[1] = %q, want gamma", tools[1].Name)
+		}
+	})
+
+	t.Run("SubsetUnknownNames", func(t *testing.T) {
+		echo := NewTool("echo", "Echoes",
+			func(ctx context.Context, in EchoInput) (EchoOutput, error) {
+				return EchoOutput{Echo: in.Message}, nil
+			},
+		)
+
+		reg := NewRegistry(echo)
+		sub := reg.Subset([]string{"echo", "nonexistent", "also_missing"})
+
+		tools := sub.Tools()
+		if len(tools) != 1 {
+			t.Fatalf("expected 1 tool, got %d", len(tools))
+		}
+		if tools[0].Name != "echo" {
+			t.Fatalf("tool name = %q, want echo", tools[0].Name)
+		}
+	})
+
+	t.Run("SubsetEmpty", func(t *testing.T) {
+		echo := NewTool("echo", "Echoes",
+			func(ctx context.Context, in EchoInput) (EchoOutput, error) {
+				return EchoOutput{Echo: in.Message}, nil
+			},
+		)
+
+		reg := NewRegistry(echo)
+		sub := reg.Subset([]string{})
+
+		tools := sub.Tools()
+		if len(tools) != 0 {
+			t.Fatalf("expected 0 tools, got %d", len(tools))
+		}
+
+		executor := sub.Executor()
+		result, err := executor(context.Background(), provider.ToolCall{Name: "echo", Args: map[string]any{}})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result != `{"error": "unknown tool: echo"}` {
+			t.Fatalf("unexpected result: %s", result)
+		}
+	})
+
+	t.Run("SubsetFullSet", func(t *testing.T) {
+		alpha := NewTool("alpha", "first",
+			func(ctx context.Context, in EchoInput) (EchoOutput, error) {
+				return EchoOutput{Echo: "a"}, nil
+			},
+		)
+		beta := NewTool("beta", "second",
+			func(ctx context.Context, in EchoInput) (EchoOutput, error) {
+				return EchoOutput{Echo: "b"}, nil
+			},
+		)
+
+		reg := NewRegistry(alpha, beta)
+		sub := reg.Subset([]string{"alpha", "beta"})
+
+		tools := sub.Tools()
+		if len(tools) != 2 {
+			t.Fatalf("expected 2 tools, got %d", len(tools))
+		}
+		if tools[0].Name != "alpha" {
+			t.Fatalf("tools[0] = %q, want alpha", tools[0].Name)
+		}
+		if tools[1].Name != "beta" {
+			t.Fatalf("tools[1] = %q, want beta", tools[1].Name)
+		}
+	})
+
+	t.Run("SubsetExecutorDispatch", func(t *testing.T) {
+		alpha := NewTool("alpha", "first",
+			func(ctx context.Context, in EchoInput) (EchoOutput, error) {
+				return EchoOutput{Echo: "alpha:" + in.Message}, nil
+			},
+		)
+		beta := NewTool("beta", "second",
+			func(ctx context.Context, in EchoInput) (EchoOutput, error) {
+				return EchoOutput{Echo: "beta:" + in.Message}, nil
+			},
+		)
+
+		reg := NewRegistry(alpha, beta)
+		sub := reg.Subset([]string{"alpha"})
+
+		executor := sub.Executor()
+
+		// Included tool works
+		result, err := executor(context.Background(), provider.ToolCall{
+			Name: "alpha",
+			Args: map[string]any{"message": "hi"},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		var out EchoOutput
+		if unmarshalErr := json.Unmarshal([]byte(result), &out); unmarshalErr != nil {
+			t.Fatalf("unmarshal: %v", unmarshalErr)
+		}
+		if out.Echo != "alpha:hi" {
+			t.Fatalf("echo = %q, want alpha:hi", out.Echo)
+		}
+
+		// Excluded tool returns error
+		result, err = executor(context.Background(), provider.ToolCall{
+			Name: "beta",
+			Args: map[string]any{"message": "hi"},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result != `{"error": "unknown tool: beta"}` {
+			t.Fatalf("unexpected result: %s", result)
+		}
+	})
 }

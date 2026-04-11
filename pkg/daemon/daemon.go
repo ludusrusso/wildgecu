@@ -300,10 +300,11 @@ func initSessionManager(ctx context.Context, cfg Config, h *home.Home, tgAuth *a
 	}
 
 	agentCfg := agent.Config{
-		Provider:     p,
-		Home:         h,
-		Workspace:    h, // daemon uses global home as workspace
-		TelegramAuth: tgAuth,
+		Provider:        p,
+		Home:            h,
+		Workspace:       h, // daemon uses global home as workspace
+		TelegramAuth:    tgAuth,
+		ResolveProvider: cfg.Container.Get,
 	}
 
 	return NewSessionManager(ctx, agentCfg, cfg.Container)

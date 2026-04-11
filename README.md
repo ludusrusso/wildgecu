@@ -25,6 +25,7 @@ WildGecu is a modular AI agent framework in Go. It provides a reusable foundatio
 - **Skills** — a plugin system with lazy-loaded Markdown-based definitions and YAML frontmatter
 - **Cron jobs** — an in-process scheduler with isolated sessions, powered by gocron
 - **Parallel tool calling** — concurrent execution of independent tool calls within the agent loop
+- **Ephemeral subagents** — delegate subtasks to child agents with isolated context, optional model override, and tool subsetting via the `spawn_agent` tool
 - **Telegram bridge** — daemon-based chat via Telegram bot
 - **Self-update** — the agent can update its own binary at runtime
 - **Background daemon** — long-running process with health checks, IPC socket, and system service support
@@ -58,7 +59,28 @@ wildgecu init:                          wildgecu chat / code:
 └──────┬──────────┘      └──────┬──────────┘         └──────┬──────────┘
        │                        │                           │
        ▼                        └─────────────┬─────────────┘
-    Chat TUI                                  ▼
+    Chat TUI                                  │
+                                              ▼
+                                     ┌─────────────────┐
+                                     │   Agent loop     │
+                                     │  (generate →     │
+                                     │   tool calls →   │
+                                     │   generate)      │
+                                     └──────┬──────────┘
+                                            │
+                              ┌─────────────┼─────────────┐
+                              │  spawn_agent (optional)   │
+                              ▼             ▼             ▼
+                        ┌──────────┐ ┌──────────┐ ┌──────────┐
+                        │ Subagent │ │ Subagent │ │ Subagent │
+                        │ (model A)│ │ (model B)│ │ (model A)│
+                        │ isolated │ │ isolated │ │ isolated │
+                        │ context  │ │ context  │ │ context  │
+                        └────┬─────┘ └────┬─────┘ └────┬─────┘
+                             │            │            │
+                             └────────────┼────────────┘
+                              text results│back to parent
+                                          ▼
                                      ┌─────────────────┐
                                      │ Memory curation │
                                      │ → .wildgecu/    │
@@ -227,6 +249,47 @@ When reviewing Go code, focus on...
 
 The agent loads skills dynamically via the `load_skill` tool during conversation.
 
+## Ephemeral subagents
+
+The agent can delegate subtasks to **ephemeral subagents** via the `spawn_agent` tool. A subagent is a short-lived child agent that runs in isolation — it receives a prompt, executes a full agent loop (generate → tool calls → generate), and returns a single text result to the parent. No SOUL, no MEMORY, no finalization. It lives within the parent session and is discarded when done.
+
+### Why subagents?
+
+- **Cheaper models for simple work** — delegate straightforward tasks (summarization, formatting, lookups) to a faster/cheaper model while keeping the expensive model for complex reasoning.
+- **Focused context** — a subagent gets a clean context window with an optional custom system prompt, so intermediate steps don't clutter the parent's conversation.
+- **Parallel research** — the parent can spawn multiple subagents simultaneously as concurrent tool calls, gathering information from different angles and synthesizing results.
+- **Tool restriction** — give a research subagent read-only tools, or give a coding subagent file-write access while restricting everything else.
+
+### `spawn_agent` tool
+
+The tool is available in both chat and code modes. Parameters:
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `prompt` | Yes | The user message to send to the child agent |
+| `system_prompt` | No | Custom system prompt. If omitted, uses a minimal default |
+| `model` | No | Provider/model reference (e.g., `gemini/gemini-2.0-flash`). If omitted, inherits the parent's model |
+| `tools` | No | List of tool names the child can use. If omitted, inherits all parent tools except `spawn_agent` |
+
+**Recursion prevention:** subagents cannot spawn further subagents. The `spawn_agent` tool is excluded from every child agent's tool set.
+
+### Example usage (from the agent's perspective)
+
+The agent decides to delegate autonomously — the user doesn't need to manage subagents directly:
+
+```
+# Agent spawns a focused researcher with a cheaper model
+spawn_agent(
+  prompt: "List all exported functions in pkg/provider/tool/registry.go",
+  model: "gemini/gemini-2.0-flash",
+  tools: ["bash", "read_file", "list_files"]
+)
+
+# Agent spawns multiple subagents in parallel for research
+spawn_agent(prompt: "Summarize the README.md", model: "gemini/gemini-2.0-flash")
+spawn_agent(prompt: "List all TODO comments in the codebase", tools: ["bash"])
+```
+
 ## Configuration
 
 WildGecu uses a unified home directory at `~/.wildgecu/` for all global state. Override it with `--home`:
@@ -364,7 +427,7 @@ wildgecu.go                  # Entry point → cmd.Execute()
 │
 ├── pkg/                     # Core domain packages
 │   ├── agent/               # Agent orchestration (Prepare, Finalize, bootstrap, memory, prompts)
-│   │   └── tools/           # Tool suites (general, exec, files, skills)
+│   │   └── tools/           # Tool suites (general, exec, files, skills, subagent)
 │   ├── provider/            # LLM provider abstraction
 │   │   ├── tool/            # Type-safe tool framework (Tool, Registry, schema generation)
 │   │   ├── factory/         # Provider factory
@@ -388,6 +451,7 @@ wildgecu.go                  # Entry point → cmd.Execute()
 - **Project-local `.wildgecu/`** — Per-project identity files (`SOUL.md`, `MEMORY.md`, `USER.md`) stay in the working directory, separate from global daemon state.
 - **Home abstraction** — File operations are abstracted behind an interface (`FSHome` for disk, `MemHome` for tests), keeping the agent logic testable.
 - **Parallel tool calling** — Independent tool calls within a single agent turn are executed concurrently for lower latency.
+- **Ephemeral subagents** — The `spawn_agent` tool lets the agent delegate subtasks to isolated child agents with optional model override and tool subsetting. Subagents are stateless and cannot spawn further subagents.
 
 ## Providers
 

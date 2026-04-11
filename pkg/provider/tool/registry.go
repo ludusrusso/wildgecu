@@ -40,6 +40,23 @@ func (r *Registry) Tools() []provider.Tool {
 	return out
 }
 
+// Subset returns a new Registry containing only the named tools,
+// preserving their original insertion order. Unknown names are silently ignored.
+func (r *Registry) Subset(names []string) *Registry {
+	want := make(map[string]struct{}, len(names))
+	for _, n := range names {
+		want[n] = struct{}{}
+	}
+	sub := &Registry{tools: make(map[string]Tool)}
+	for _, name := range r.order {
+		if _, ok := want[name]; ok {
+			sub.tools[name] = r.tools[name]
+			sub.order = append(sub.order, name)
+		}
+	}
+	return sub
+}
+
 // Executor returns a provider.ToolExecutor that dispatches by tool name.
 func (r *Registry) Executor() provider.ToolExecutor {
 	return func(ctx context.Context, tc provider.ToolCall) (string, error) {
