@@ -14,6 +14,7 @@ const defaultSubagentSystemPrompt = "You are a helpful assistant. Complete the g
 
 type spawnAgentInput struct {
 	Prompt       string   `json:"prompt" description:"The task or question for the subagent"`
+	Name         string   `json:"name,omitempty" description:"Short identifier for this subagent (e.g. researcher, summarizer). Shown in tool-call output so the user can tell which subagent is acting."`
 	SystemPrompt string   `json:"system_prompt,omitempty" description:"Optional system prompt for the subagent"`
 	Model        string   `json:"model,omitempty" description:"Optional model override (e.g. openai/gpt-4o-mini)"`
 	Tools        []string `json:"tools,omitempty" description:"Optional list of tool names the subagent can use. When omitted, inherits all parent tools except spawn_agent."`
@@ -79,11 +80,15 @@ func newSpawnAgentTool(defaultProvider provider.Provider, reg *tool.Registry, re
 			}
 
 			// Extract parent's onToolCall from context and wrap it to
-			// inject "subagent" as the agent label.
+			// inject the agent name as the agent label.
+			agentName := in.Name
+			if agentName == "" {
+				agentName = "subagent"
+			}
 			var childOnToolCall provider.ToolCallCallback
 			if parentCb := provider.GetToolCallCallback(ctx); parentCb != nil {
 				childOnToolCall = func(name, args, _ string) {
-					parentCb(name, args, "subagent")
+					parentCb(name, args, agentName)
 				}
 			}
 
