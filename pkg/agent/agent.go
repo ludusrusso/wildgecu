@@ -14,13 +14,18 @@ import (
 	"wildgecu/x/debug"
 )
 
+// ProviderResolver resolves a provider.Provider from a model identifier.
+// It is typically backed by a container.Container.
+type ProviderResolver func(ctx context.Context, model string) (provider.Provider, error)
+
 // Config holds the configuration needed to run the agent.
 type Config struct {
-	Provider     provider.Provider
-	Home         *home.Home
-	Workspace    *home.Home
-	TelegramAuth *auth.Store // nil when Telegram auth is not configured
-	Debug        bool
+	Provider        provider.Provider
+	Home            *home.Home
+	Workspace       *home.Home
+	TelegramAuth    *auth.Store        // nil when Telegram auth is not configured
+	ResolveProvider ProviderResolver   // nil when model override is not supported
+	Debug           bool
 }
 
 // Prepare setup the agent environment, loads soul/memory and returns a session configuration.
@@ -55,6 +60,7 @@ func Prepare(ctx context.Context, cfg Config) (*session.Config, *debug.Logger, e
 	registry.Add(tools.SkillTools(skillsDir))
 	registry.Add(tools.InformTools())
 	registry.Add(tools.TelegramTools(cfg.TelegramAuth))
+	registry.Add(tools.SubagentTools(cfg.Provider, registry, tools.ProviderResolver(cfg.ResolveProvider)))
 	systemPrompt := BuildSystemPrompt(cfg.Workspace, soulContent, memoryContent)
 	if dbg != nil {
 		dbg.SystemPrompt(systemPrompt)
@@ -121,6 +127,7 @@ func PrepareCode(ctx context.Context, cfg Config, workDir string) (*session.Conf
 	registry.Add(tools.SkillTools(skillsDir))
 	registry.Add(tools.InformTools())
 	registry.Add(tools.TelegramTools(cfg.TelegramAuth))
+	registry.Add(tools.SubagentTools(cfg.Provider, registry, tools.ProviderResolver(cfg.ResolveProvider)))
 	systemPrompt := BuildCodeSystemPrompt(cfg.Workspace, soulContent, memoryContent, workDir)
 	if dbg != nil {
 		dbg.SystemPrompt(systemPrompt)
