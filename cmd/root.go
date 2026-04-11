@@ -87,6 +87,10 @@ func initConfig() {
 		os.Exit(1)
 	}
 
+	if err = config.LoadDotEnv(homeDir); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+	}
+
 	cfgPath := filepath.Join(homeDir, "wildgecu.yaml")
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
