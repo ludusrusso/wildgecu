@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.0](https://github.com/ludusrusso/wildgecu/compare/v1.0.0...v1.1.0) (2026-04-11)
+
+
+### Features
+
+* **tool:** add list_models tool to expose available models to the agent ([eced02b](https://github.com/ludusrusso/wildgecu/commit/eced02b4a74303b3ff4d5833639d774dea632f99))
+* **tool:** add spawn_agent tool for ephemeral subagents ([#49](https://github.com/ludusrusso/wildgecu/issues/49)) ([9f7a3d6](https://github.com/ludusrusso/wildgecu/commit/9f7a3d6f4f4334f8c634a1bf5a3b0a78c7a5875f)), closes [#40](https://github.com/ludusrusso/wildgecu/issues/40)
+* **tui:** surface subagent tool calls with agent label ([#54](https://github.com/ludusrusso/wildgecu/issues/54)) ([627d47d](https://github.com/ludusrusso/wildgecu/commit/627d47dd3eb6990f7aefcf07a352067cbf1254d8)), closes [#53](https://github.com/ludusrusso/wildgecu/issues/53)
+
 ## 1.0.0 (2026-04-11)
 
 
