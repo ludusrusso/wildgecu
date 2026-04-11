@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -162,6 +163,129 @@ default_model: mygemini/some-model
 		_, err := Load(cfgPath)
 		if err == nil {
 			t.Error("Load() expected error for provider missing type, got nil")
+		}
+	})
+
+	t.Run("EnvResolvesAPIKey", func(t *testing.T) {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "wildgecu.yaml")
+		data := []byte(`providers:
+  gemini:
+    type: gemini
+    api_key: env(GEMINI_API_KEY)
+default_model: gemini/gemini-3-flash-preview
+`)
+		if err := os.WriteFile(cfgPath, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		t.Setenv("GEMINI_API_KEY", "secret-from-env")
+
+		cfg, err := Load(cfgPath)
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+
+		if cfg.Providers["gemini"].APIKey != "secret-from-env" {
+			t.Errorf("gemini.APIKey = %q, want %q", cfg.Providers["gemini"].APIKey, "secret-from-env")
+		}
+	})
+
+	t.Run("ErrorOnMissingEnvVar", func(t *testing.T) {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "wildgecu.yaml")
+		data := []byte(`providers:
+  google:
+    type: gemini
+    api_key: env(MISSING_SECRET_VAR)
+default_model: google/gemini-3-flash-preview
+`)
+		if err := os.WriteFile(cfgPath, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err := Load(cfgPath)
+		if err == nil {
+			t.Fatal("Load() expected error for missing env var, got nil")
+		}
+
+		errMsg := err.Error()
+		if !strings.Contains(errMsg, "google") {
+			t.Errorf("error should name provider %q, got: %s", "google", errMsg)
+		}
+		if !strings.Contains(errMsg, "MISSING_SECRET_VAR") {
+			t.Errorf("error should name env var %q, got: %s", "MISSING_SECRET_VAR", errMsg)
+		}
+	})
+
+	t.Run("EnvResolvesMultipleFields", func(t *testing.T) {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "wildgecu.yaml")
+		// Uses both quoted and unquoted env() syntax
+		data := []byte(`providers:
+  gemini:
+    type: gemini
+    api_key: env(TEST_GEMINI_KEY)
+  ollama:
+    type: openai
+    base_url: "env(TEST_OLLAMA_URL)"
+default_model: gemini/gemini-3-flash-preview
+telegram_token: env(TEST_TG_TOKEN)
+`)
+		if err := os.WriteFile(cfgPath, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		t.Setenv("TEST_GEMINI_KEY", "gemini-secret")
+		t.Setenv("TEST_OLLAMA_URL", "http://my-ollama:11434/v1")
+		t.Setenv("TEST_TG_TOKEN", "tg-secret")
+
+		cfg, err := Load(cfgPath)
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+
+		if cfg.Providers["gemini"].APIKey != "gemini-secret" {
+			t.Errorf("gemini.APIKey = %q, want %q", cfg.Providers["gemini"].APIKey, "gemini-secret")
+		}
+		if cfg.Providers["ollama"].BaseURL != "http://my-ollama:11434/v1" {
+			t.Errorf("ollama.BaseURL = %q, want %q", cfg.Providers["ollama"].BaseURL, "http://my-ollama:11434/v1")
+		}
+		if cfg.TelegramToken != "tg-secret" {
+			t.Errorf("TelegramToken = %q, want %q", cfg.TelegramToken, "tg-secret")
+		}
+	})
+
+	t.Run("LiteralStringsUnchanged", func(t *testing.T) {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "wildgecu.yaml")
+		data := []byte(`providers:
+  gemini:
+    type: gemini
+    api_key: plain-api-key
+  ollama:
+    type: openai
+    base_url: http://localhost:11434/v1
+default_model: gemini/gemini-3-flash-preview
+telegram_token: my-plain-token
+`)
+		if err := os.WriteFile(cfgPath, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfg, err := Load(cfgPath)
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+
+		if cfg.Providers["gemini"].APIKey != "plain-api-key" {
+			t.Errorf("gemini.APIKey = %q, want %q", cfg.Providers["gemini"].APIKey, "plain-api-key")
+		}
+		if cfg.Providers["ollama"].BaseURL != "http://localhost:11434/v1" {
+			t.Errorf("ollama.BaseURL = %q, want %q", cfg.Providers["ollama"].BaseURL, "http://localhost:11434/v1")
+		}
+		if cfg.TelegramToken != "my-plain-token" {
+			t.Errorf("TelegramToken = %q, want %q", cfg.TelegramToken, "my-plain-token")
 		}
 	})
 

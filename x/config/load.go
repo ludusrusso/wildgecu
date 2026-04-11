@@ -3,10 +3,13 @@ package config
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
 )
+
+var envPattern = regexp.MustCompile(`^env\(([^)]+)\)$`)
 
 // ProviderConfig holds configuration for a single LLM provider.
 type ProviderConfig struct {
@@ -35,11 +38,53 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
 
+	if err := cfg.resolveEnv(); err != nil {
+		return nil, err
+	}
+
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
 
 	return &cfg, nil
+}
+
+func resolveEnvValue(val string) (string, string, bool) {
+	m := envPattern.FindStringSubmatch(val)
+	if m == nil {
+		return val, "", false
+	}
+	envVar := m[1]
+	resolved, ok := os.LookupEnv(envVar)
+	if !ok {
+		return "", envVar, true
+	}
+	return resolved, "", true
+}
+
+func (c *Config) resolveEnv() error {
+	for name, p := range c.Providers {
+		for _, field := range []*string{&p.APIKey, &p.BaseURL} {
+			if resolved, envVar, isEnv := resolveEnvValue(*field); isEnv {
+				if envVar != "" {
+					return fmt.Errorf("config: provider %q: env var %q is not set", name, envVar)
+				}
+				*field = resolved
+			}
+		}
+		c.Providers[name] = p
+	}
+
+	for _, field := range []*string{&c.TelegramToken, &c.DefaultModel} {
+		if resolved, envVar, isEnv := resolveEnvValue(*field); isEnv {
+			if envVar != "" {
+				return fmt.Errorf("config: env var %q is not set", envVar)
+			}
+			*field = resolved
+		}
+	}
+
+	return nil
 }
 
 func (c *Config) validate() error {
