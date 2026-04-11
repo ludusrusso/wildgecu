@@ -306,7 +306,7 @@ func initSessionManager(ctx context.Context, cfg Config, h *home.Home, tgAuth *a
 		TelegramAuth: tgAuth,
 	}
 
-	return NewSessionManager(ctx, agentCfg)
+	return NewSessionManager(ctx, agentCfg, cfg.Container)
 }
 
 func waitWithTimeout(wg *sync.WaitGroup, timeout time.Duration) {

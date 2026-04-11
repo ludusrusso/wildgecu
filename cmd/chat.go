@@ -31,5 +31,5 @@ func runChat(cmd *cobra.Command, args []string) error {
 	}
 
 	ctx := context.Background()
-	return tui.Run(ctx, socketPath)
+	return tui.Run(ctx, socketPath, modelFlag)
 }

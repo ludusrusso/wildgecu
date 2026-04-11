@@ -18,6 +18,7 @@ type ChatRequest struct {
 	Content   string `json:"content,omitempty"`
 	Mode      string `json:"mode,omitempty"`
 	WorkDir   string `json:"work_dir,omitempty"`
+	Model     string `json:"model,omitempty"`
 }
 
 // CommandInfo is a name+description pair returned by the commands.list event.
@@ -73,17 +74,31 @@ func (s *SocketServer) dispatchChatRequest(req *ChatRequest, send func(ChatEvent
 		var welcome string
 		if req.Mode == "code" {
 			var err error
-			sess, err = sessions.CreateCode(req.WorkDir)
+			if req.Model != "" {
+				sess, err = sessions.CreateCodeWithModel(req.WorkDir, req.Model)
+			} else {
+				sess, err = sessions.CreateCode(req.WorkDir)
+			}
 			if err != nil {
 				send(ChatEvent{Type: "error", Message: "create code session: " + err.Error()})
 				return
 			}
 			welcome = sess.welcomeText
 		} else {
-			sess = sessions.Create()
-			welcome = sessions.WelcomeText()
+			if req.Model != "" {
+				var err error
+				sess, err = sessions.CreateWithModel(req.Model)
+				if err != nil {
+					send(ChatEvent{Type: "error", Message: "create session: " + err.Error()})
+					return
+				}
+				welcome = sess.welcomeText
+			} else {
+				sess = sessions.Create()
+				welcome = sessions.WelcomeText()
+			}
 		}
-		logger.Info("session created", "session_id", sess.ID, "mode", req.Mode)
+		logger.Info("session created", "session_id", sess.ID, "mode", req.Mode, "model", req.Model)
 		send(ChatEvent{
 			Type:      "session.created",
 			SessionID: sess.ID,

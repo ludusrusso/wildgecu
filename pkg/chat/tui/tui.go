@@ -70,6 +70,7 @@ type Model struct {
 	ready          bool
 	codeMode       bool
 	workDir        string
+	model          string
 }
 
 // New creates a new TUI Model connected to the daemon via a daemon.Client.
@@ -112,9 +113,9 @@ func (m Model) createSession() tea.Msg {
 	var sessionID, welcome string
 	var err error
 	if m.codeMode {
-		sessionID, welcome, err = m.client.CreateCodeSession(m.workDir)
+		sessionID, welcome, err = m.client.CreateCodeSession(m.workDir, m.model)
 	} else {
-		sessionID, welcome, err = m.client.CreateSession()
+		sessionID, welcome, err = m.client.CreateSession(m.model)
 	}
 	if err != nil {
 		return sessionErrorMsg{err: err}
@@ -442,7 +443,7 @@ func (m Model) View() string {
 }
 
 // Run creates a Model and runs the Bubble Tea program.
-func Run(ctx context.Context, socketPath string) error {
+func Run(ctx context.Context, socketPath, model string) error {
 	client, err := daemon.Connect(socketPath)
 	if err != nil {
 		return err
@@ -452,6 +453,7 @@ func Run(ctx context.Context, socketPath string) error {
 	}()
 
 	m := New(ctx, client)
+	m.model = model
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	m.program.p = p
 	_, err = p.Run()
@@ -459,7 +461,7 @@ func Run(ctx context.Context, socketPath string) error {
 }
 
 // RunCode creates a code-mode Model and runs the Bubble Tea program.
-func RunCode(ctx context.Context, socketPath, workDir string) error {
+func RunCode(ctx context.Context, socketPath, workDir, model string) error {
 	client, err := daemon.Connect(socketPath)
 	if err != nil {
 		return err
@@ -471,6 +473,7 @@ func RunCode(ctx context.Context, socketPath, workDir string) error {
 	m := New(ctx, client)
 	m.codeMode = true
 	m.workDir = workDir
+	m.model = model
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	m.program.p = p
 	_, err = p.Run()

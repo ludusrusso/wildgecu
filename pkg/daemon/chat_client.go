@@ -25,6 +25,7 @@ type request struct {
 	Content   string `json:"content,omitempty"`
 	Mode      string `json:"mode,omitempty"`
 	WorkDir   string `json:"work_dir,omitempty"`
+	Model     string `json:"model,omitempty"`
 }
 
 // Client communicates with the daemon over a long-lived Unix socket using NDJSON.
@@ -49,8 +50,9 @@ func Connect(socketPath string) (*Client, error) {
 
 // CreateSession asks the daemon to create a new chat session.
 // Returns the session ID and the welcome text.
-func (c *Client) CreateSession() (sessionID, welcome string, err error) {
-	if err := c.encoder.Encode(request{Type: "session.create"}); err != nil {
+// If model is non-empty, the session will use that model instead of the daemon default.
+func (c *Client) CreateSession(model string) (sessionID, welcome string, err error) {
+	if err := c.encoder.Encode(request{Type: "session.create", Model: model}); err != nil {
 		return "", "", fmt.Errorf("send session.create: %w", err)
 	}
 	var ev Event
@@ -65,8 +67,9 @@ func (c *Client) CreateSession() (sessionID, welcome string, err error) {
 
 // CreateCodeSession asks the daemon to create a new code-mode session.
 // Returns the session ID and the welcome text.
-func (c *Client) CreateCodeSession(workDir string) (sessionID, welcome string, err error) {
-	if err := c.encoder.Encode(request{Type: "session.create", Mode: "code", WorkDir: workDir}); err != nil {
+// If model is non-empty, the session will use that model instead of the daemon default.
+func (c *Client) CreateCodeSession(workDir, model string) (sessionID, welcome string, err error) {
+	if err := c.encoder.Encode(request{Type: "session.create", Mode: "code", WorkDir: workDir, Model: model}); err != nil {
 		return "", "", fmt.Errorf("send session.create (code): %w", err)
 	}
 	var ev Event

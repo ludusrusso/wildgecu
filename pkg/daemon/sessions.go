@@ -9,16 +9,18 @@ import (
 	"wildgecu/pkg/agent"
 	"wildgecu/pkg/provider"
 	"wildgecu/pkg/session"
+	"wildgecu/x/container"
 
 	"github.com/google/uuid"
 )
 
 // SessionManager owns all chat sessions and delegates to session.RunTurnStream.
 type SessionManager struct {
-	agentCfg agent.Config
-	chatCfg  *session.Config
-	sessions map[string]*ManagedSession
-	mu       sync.RWMutex
+	agentCfg  agent.Config
+	chatCfg   *session.Config
+	container *container.Container
+	sessions  map[string]*ManagedSession
+	mu        sync.RWMutex
 }
 
 // ManagedSession holds the state for a single chat session.
@@ -34,7 +36,7 @@ type ManagedSession struct {
 }
 
 // NewSessionManager calls agent.Prepare to build the shared session.Config.
-func NewSessionManager(ctx context.Context, agentCfg agent.Config) (*SessionManager, error) {
+func NewSessionManager(ctx context.Context, agentCfg agent.Config, ctr *container.Container) (*SessionManager, error) {
 	chatCfg, dbg, err := agent.Prepare(ctx, agentCfg)
 	if err != nil {
 		return nil, fmt.Errorf("agent prepare: %w", err)
@@ -44,9 +46,10 @@ func NewSessionManager(ctx context.Context, agentCfg agent.Config) (*SessionMana
 	_ = dbg
 
 	return &SessionManager{
-		agentCfg: agentCfg,
-		chatCfg:  chatCfg,
-		sessions: make(map[string]*ManagedSession),
+		agentCfg:  agentCfg,
+		chatCfg:   chatCfg,
+		container: ctr,
+		sessions:  make(map[string]*ManagedSession),
 	}, nil
 }
 
@@ -73,6 +76,56 @@ func (sm *SessionManager) CreateSession() string {
 // CreateCode creates a new code-mode session with file tools and workDir-scoped bash.
 func (sm *SessionManager) CreateCode(workDir string) (*ManagedSession, error) {
 	codeCfg, _, err := agent.PrepareCode(context.Background(), sm.agentCfg, workDir)
+	if err != nil {
+		return nil, err
+	}
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sess := &ManagedSession{
+		ID:          uuid.New().String(),
+		Messages:    append([]provider.Message{}, codeCfg.InitialMessages...),
+		cfg:         codeCfg,
+		welcomeText: codeCfg.WelcomeText,
+		createdAt:   time.Now(),
+	}
+	sm.sessions[sess.ID] = sess
+	return sess, nil
+}
+
+// CreateWithModel creates a chat session using a specific model override.
+func (sm *SessionManager) CreateWithModel(model string) (*ManagedSession, error) {
+	p, err := sm.container.Get(context.Background(), model)
+	if err != nil {
+		return nil, fmt.Errorf("resolve model %q: %w", model, err)
+	}
+	overrideCfg := sm.agentCfg
+	overrideCfg.Provider = p
+	chatCfg, _, err := agent.Prepare(context.Background(), overrideCfg)
+	if err != nil {
+		return nil, fmt.Errorf("prepare session for model %q: %w", model, err)
+	}
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sess := &ManagedSession{
+		ID:          uuid.New().String(),
+		Messages:    append([]provider.Message{}, chatCfg.InitialMessages...),
+		cfg:         chatCfg,
+		welcomeText: chatCfg.WelcomeText,
+		createdAt:   time.Now(),
+	}
+	sm.sessions[sess.ID] = sess
+	return sess, nil
+}
+
+// CreateCodeWithModel creates a code-mode session using a specific model override.
+func (sm *SessionManager) CreateCodeWithModel(workDir, model string) (*ManagedSession, error) {
+	p, err := sm.container.Get(context.Background(), model)
+	if err != nil {
+		return nil, fmt.Errorf("resolve model %q: %w", model, err)
+	}
+	overrideCfg := sm.agentCfg
+	overrideCfg.Provider = p
+	codeCfg, _, err := agent.PrepareCode(context.Background(), overrideCfg, workDir)
 	if err != nil {
 		return nil, err
 	}

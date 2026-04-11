@@ -36,5 +36,5 @@ func runCode(cmd *cobra.Command, args []string) error {
 	}
 
 	ctx := context.Background()
-	return tui.RunCode(ctx, socketPath, workDir)
+	return tui.RunCode(ctx, socketPath, workDir, modelFlag)
 }
