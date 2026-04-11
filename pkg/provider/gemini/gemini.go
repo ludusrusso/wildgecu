@@ -45,25 +45,7 @@ func (p *Provider) GenerateStream(ctx context.Context, params *provider.Generate
 	chunks := make(chan provider.StreamChunk)
 	errCh := make(chan error, 1)
 
-	model := p.model
-	if params.Model != "" {
-		model = params.Model
-	}
-	contents := toContents(params.Messages)
-	config := &genai.GenerateContentConfig{}
-	if params.SystemPrompt != "" {
-		config.SystemInstruction = genai.NewContentFromText(params.SystemPrompt, genai.RoleUser)
-	}
-	if len(params.Tools) > 0 {
-		config.Tools = toTools(params.Tools)
-	}
-	if p.googleSearch {
-		config.Tools = append(config.Tools, &genai.Tool{GoogleSearch: &genai.GoogleSearch{}})
-		t := true
-		config.ToolConfig = &genai.ToolConfig{
-			IncludeServerSideToolInvocations: &t,
-		}
-	}
+	model, contents, config := p.buildRequest(params)
 
 	go func() {
 		defer close(chunks)
@@ -74,29 +56,13 @@ func (p *Provider) GenerateStream(ctx context.Context, params *provider.Generate
 				errCh <- fmt.Errorf("gemini: stream: %w", err)
 				return
 			}
-			chunk := provider.StreamChunk{}
-			if resp.UsageMetadata != nil {
-				chunk.Usage = provider.Usage{
-					InputTokens:  int(resp.UsageMetadata.PromptTokenCount),
-					OutputTokens: int(resp.UsageMetadata.CandidatesTokenCount),
-				}
+			chunk := toStreamChunk(resp)
+			select {
+			case chunks <- chunk:
+			case <-ctx.Done():
+				errCh <- ctx.Err()
+				return
 			}
-			if len(resp.Candidates) > 0 && resp.Candidates[0].Content != nil {
-				for _, part := range resp.Candidates[0].Content.Parts {
-					if part.Text != "" {
-						chunk.Content += part.Text
-					}
-					if part.FunctionCall != nil {
-						chunk.ToolCalls = append(chunk.ToolCalls, provider.ToolCall{
-							ID:               part.FunctionCall.Name,
-							Name:             part.FunctionCall.Name,
-							Args:             part.FunctionCall.Args,
-							ThoughtSignature: part.ThoughtSignature,
-						})
-					}
-				}
-			}
-			chunks <- chunk
 		}
 	}()
 
@@ -104,18 +70,28 @@ func (p *Provider) GenerateStream(ctx context.Context, params *provider.Generate
 }
 
 func (p *Provider) Generate(ctx context.Context, params *provider.GenerateParams) (*provider.Response, error) {
+	model, contents, config := p.buildRequest(params)
+
+	resp, err := p.client.Models.GenerateContent(ctx, model, contents, config)
+	if err != nil {
+		return nil, fmt.Errorf("gemini: generate: %w", err)
+	}
+
+	return toResponse(resp), nil
+}
+
+// buildRequest constructs the model name, contents, and config shared by
+// both Generate and GenerateStream.
+func (p *Provider) buildRequest(params *provider.GenerateParams) (string, []*genai.Content, *genai.GenerateContentConfig) {
 	model := p.model
 	if params.Model != "" {
 		model = params.Model
 	}
-
 	contents := toContents(params.Messages)
 	config := &genai.GenerateContentConfig{}
-
 	if params.SystemPrompt != "" {
 		config.SystemInstruction = genai.NewContentFromText(params.SystemPrompt, genai.RoleUser)
 	}
-
 	if len(params.Tools) > 0 {
 		config.Tools = toTools(params.Tools)
 	}
@@ -126,13 +102,34 @@ func (p *Provider) Generate(ctx context.Context, params *provider.GenerateParams
 			IncludeServerSideToolInvocations: &t,
 		}
 	}
+	return model, contents, config
+}
 
-	resp, err := p.client.Models.GenerateContent(ctx, model, contents, config)
-	if err != nil {
-		return nil, fmt.Errorf("gemini: generate: %w", err)
+// toStreamChunk converts a Gemini streaming response to a StreamChunk.
+func toStreamChunk(resp *genai.GenerateContentResponse) provider.StreamChunk {
+	chunk := provider.StreamChunk{}
+	if resp.UsageMetadata != nil {
+		chunk.Usage = provider.Usage{
+			InputTokens:  int(resp.UsageMetadata.PromptTokenCount),
+			OutputTokens: int(resp.UsageMetadata.CandidatesTokenCount),
+		}
 	}
-
-	return toResponse(resp), nil
+	if len(resp.Candidates) > 0 && resp.Candidates[0].Content != nil {
+		for _, part := range resp.Candidates[0].Content.Parts {
+			if part.Text != "" {
+				chunk.Content += part.Text
+			}
+			if part.FunctionCall != nil {
+				chunk.ToolCalls = append(chunk.ToolCalls, provider.ToolCall{
+					ID:               part.FunctionCall.Name,
+					Name:             part.FunctionCall.Name,
+					Args:             part.FunctionCall.Args,
+					ThoughtSignature: part.ThoughtSignature,
+				})
+			}
+		}
+	}
+	return chunk
 }
 
 // toContents converts our messages to Gemini Content objects.
@@ -242,6 +239,13 @@ func toPropertySchema(prop map[string]any) *genai.Schema {
 				for name, raw := range props {
 					if pm, ok := raw.(map[string]any); ok {
 						s.Properties[name] = toPropertySchema(pm)
+					}
+				}
+			}
+			if required, ok := prop["required"].([]any); ok {
+				for _, r := range required {
+					if rs, ok := r.(string); ok {
+						s.Required = append(s.Required, rs)
 					}
 				}
 			}

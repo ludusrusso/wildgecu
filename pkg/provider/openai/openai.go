@@ -31,6 +31,23 @@ func WithBaseURL(url string) Option {
 	return func(o *options) { o.baseURL = url }
 }
 
+// NewRegolo creates a provider for the Regolo OpenAI-compatible API.
+func NewRegolo(apiKey, model string) *Provider {
+	return New(apiKey, model, WithBaseURL("https://api.regolo.ai/v1"))
+}
+
+// NewMistral creates a provider for the Mistral OpenAI-compatible API.
+func NewMistral(apiKey, model string) *Provider {
+	return New(apiKey, model, WithBaseURL("https://api.mistral.ai/v1"))
+}
+
+// NewOllama creates a provider for a local Ollama instance.
+// The default base URL is http://localhost:11434/v1; override with WithBaseURL.
+func NewOllama(model string, opts ...Option) *Provider {
+	opts = append([]Option{WithBaseURL("http://localhost:11434/v1")}, opts...)
+	return New("", model, opts...)
+}
+
 // New creates an OpenAI provider. Pass an empty apiKey for endpoints
 // that do not require authentication (e.g. local Ollama).
 func New(apiKey, model string, opts ...Option) *Provider {
@@ -55,12 +72,7 @@ func New(apiKey, model string, opts ...Option) *Provider {
 
 // Generate performs a non-streaming chat completion.
 func (p *Provider) Generate(ctx context.Context, params *provider.GenerateParams) (*provider.Response, error) {
-	model := p.model
-	if params.Model != "" {
-		model = params.Model
-	}
-
-	body := p.buildParams(model, params)
+	body := p.buildParams(params)
 
 	resp, err := p.client.Chat.Completions.New(ctx, body)
 	if err != nil {
@@ -75,12 +87,7 @@ func (p *Provider) GenerateStream(ctx context.Context, params *provider.Generate
 	chunks := make(chan provider.StreamChunk)
 	errCh := make(chan error, 1)
 
-	model := p.model
-	if params.Model != "" {
-		model = params.Model
-	}
-
-	body := p.buildParams(model, params)
+	body := p.buildParams(params)
 	body.StreamOptions = oai.ChatCompletionStreamOptionsParam{
 		IncludeUsage: oai.Opt(true),
 	}
@@ -150,7 +157,12 @@ func (p *Provider) GenerateStream(ctx context.Context, params *provider.Generate
 				}
 			}
 
-			chunks <- chunk
+			select {
+			case chunks <- chunk:
+			case <-ctx.Done():
+				errCh <- ctx.Err()
+				return
+			}
 		}
 
 		if err := stream.Err(); err != nil {
@@ -162,7 +174,11 @@ func (p *Provider) GenerateStream(ctx context.Context, params *provider.Generate
 }
 
 // buildParams constructs the ChatCompletionNewParams from our internal types.
-func (p *Provider) buildParams(model string, params *provider.GenerateParams) oai.ChatCompletionNewParams {
+func (p *Provider) buildParams(params *provider.GenerateParams) oai.ChatCompletionNewParams {
+	model := p.model
+	if params.Model != "" {
+		model = params.Model
+	}
 	body := oai.ChatCompletionNewParams{
 		Model:    model,
 		Messages: toMessages(params.SystemPrompt, params.Messages),

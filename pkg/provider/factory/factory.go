@@ -12,7 +12,7 @@ import (
 
 // Config holds the parameters needed to create any supported provider.
 type Config struct {
-	// Provider name: "gemini", "openai", or "ollama".
+	// Provider name: "gemini", "openai", "ollama", "mistral", or "regolo".
 	Provider string
 	// Model identifier (provider-specific, e.g. "gpt-4o", "gemini-3-flash-preview", "llama3").
 	Model string
@@ -24,8 +24,6 @@ type Config struct {
 	// Defaults to "http://localhost:11434/v1" when empty.
 	OllamaURL string
 }
-
-const defaultOllamaURL = "http://localhost:11434/v1"
 
 // New creates a provider.Provider based on the configuration.
 func New(ctx context.Context, cfg Config) (provider.Provider, error) {
@@ -46,14 +44,26 @@ func New(ctx context.Context, cfg Config) (provider.Provider, error) {
 		}
 		return openai.New(cfg.APIKey, cfg.Model), nil
 
-	case "ollama":
-		url := cfg.OllamaURL
-		if url == "" {
-			url = defaultOllamaURL
+	case "mistral":
+		if cfg.APIKey == "" {
+			return nil, fmt.Errorf("mistral provider requires an API key; set mistral_api_key in config or MISTRAL_API_KEY env var")
 		}
-		return openai.New("", cfg.Model, openai.WithBaseURL(url)), nil
+		return openai.NewMistral(cfg.APIKey, cfg.Model), nil
+
+	case "regolo":
+		if cfg.APIKey == "" {
+			return nil, fmt.Errorf("regolo provider requires an API key; set regolo_api_key in config or REGOLO_API_KEY env var")
+		}
+		return openai.NewRegolo(cfg.APIKey, cfg.Model), nil
+
+	case "ollama":
+		var opts []openai.Option
+		if cfg.OllamaURL != "" {
+			opts = append(opts, openai.WithBaseURL(cfg.OllamaURL))
+		}
+		return openai.NewOllama(cfg.Model, opts...), nil
 
 	default:
-		return nil, fmt.Errorf("unknown provider %q; supported: gemini, openai, ollama", cfg.Provider)
+		return nil, fmt.Errorf("unknown provider %q; supported: gemini, openai, mistral, regolo, ollama", cfg.Provider)
 	}
 }
