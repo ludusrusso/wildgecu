@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -106,13 +107,14 @@ func Run(ctx context.Context, cfg Config) error {
 				}
 			}
 		}
+		providerName, modelName, _ := strings.Cut(cfg.DefaultModel, "/")
 		return command.StatusInfo{
 			SessionID:    sess.ID,
 			MessageCount: len(sess.Messages),
 			ToolCalls:    toolCalls,
 			SkillsLoaded: len(uniqueSkills),
-			Provider:     cfg.DefaultModel,
-			Model:        cfg.DefaultModel,
+			Provider:     providerName,
+			Model:        modelName,
 			Uptime:       time.Since(sess.createdAt),
 		}, nil
 	})
