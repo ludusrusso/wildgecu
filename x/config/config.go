@@ -61,28 +61,30 @@ func ProjectFilePath(baseDir, filename string) (string, error) {
 }
 
 const defaultConfig = `# wildgecu configuration
-# provider: "gemini", "openai", or "ollama"
-provider: "gemini"
-model: "gemini-3-flash-preview"
+providers:
+  gemini:
+    type: gemini
+    api_key: env(GEMINI_API_KEY)
+    # google_search: true
 
-# Provider API keys (set the one matching your provider)
-gemini_api_key: ""
-openai_api_key: ""
+  # openai:
+  #   type: openai
+  #   api_key: env(OPENAI_API_KEY)
 
-# Ollama settings (no API key required)
-# ollama_base_url: "http://localhost:11434/v1"
+  # ollama:
+  #   type: ollama
 
-# base_folder: "/path/to/project"
+# models:
+#   fast: gemini/gemini-2.0-flash
+#   smart: gemini/gemini-2.5-pro
+
+default_model: gemini/gemini-2.5-flash
 `
 
-// EnsureConfigFile creates a default wildgecu.yaml in ~/.wildgecu/ if no config
-// file is currently loaded. Returns the path to the config file and whether
-// it was newly created.
-func EnsureConfigFile(viperConfigUsed string) (string, bool, error) {
-	if viperConfigUsed != "" {
-		return viperConfigUsed, false, nil
-	}
-
+// EnsureConfigFile creates a default wildgecu.yaml in ~/.wildgecu/ if one does
+// not already exist. Returns the path to the config file and whether it was
+// newly created.
+func EnsureConfigFile() (string, bool, error) {
 	configPath, err := GlobalFilePath("wildgecu.yaml")
 	if err != nil {
 		return "", false, fmt.Errorf("resolve config path: %w", err)

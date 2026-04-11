@@ -8,9 +8,9 @@ import (
 
 	"wildgecu/pkg/home"
 	"wildgecu/x/config"
+	"wildgecu/x/container"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 // Version, Commit, and Date are set via -ldflags at build time.
@@ -18,9 +18,12 @@ var Version = "dev"
 var Commit = "none"
 var Date = "unknown"
 
-var cfgFile string
 var debugFlag bool
 var homeFlag string
+var modelFlag string
+
+// appConfig holds the parsed config, set during initConfig.
+var appConfig *config.Config
 
 var rootCmd = &cobra.Command{
 	Use:   "wildgecu",
@@ -37,7 +40,7 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 	rootCmd.PersistentFlags().StringVar(&homeFlag, "home", "", "override home directory (default: ~/.wildgecu)")
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default: ./wildgecu.yaml)")
+	rootCmd.PersistentFlags().StringVar(&modelFlag, "model", "", "override default model (alias or provider/model)")
 	rootCmd.Flags().BoolVar(&debugFlag, "debug", false, "enable debug logging to ~/.wildgecu/debug/<timestamp>.md")
 }
 
@@ -62,14 +65,9 @@ func resolveHomePath(path string) (string, error) {
 	return filepath.Abs(path)
 }
 
-// resolveAPIKey returns the API key for the currently configured provider.
-func resolveAPIKey() string {
-	switch viper.GetString("provider") {
-	case "openai":
-		return viper.GetString("openai_api_key")
-	default:
-		return viper.GetString("gemini_api_key")
-	}
+// newContainer creates a container.Container from the app config.
+func newContainer() *container.Container {
+	return container.New(appConfig, container.DefaultFactory)
 }
 
 func initConfig() {
@@ -83,31 +81,30 @@ func initConfig() {
 		config.SetGlobalHome(resolved)
 	}
 
-	viper.SetDefault("provider", "gemini")
-	viper.SetDefault("model", "gemini-3-flash-preview")
-	viper.SetDefault("gemini_api_key", "")
-	viper.SetDefault("openai_api_key", "")
-	viper.SetDefault("ollama_base_url", "http://localhost:11434/v1")
-	viper.SetDefault("google_search", false)
-	viper.SetDefault("base_folder", "")
-
-	if cfgFile != "" {
-		viper.SetConfigFile(cfgFile)
-	} else {
-		viper.SetConfigName("wildgecu")
-		viper.SetConfigType("yaml")
-
-		if homeDir, err := config.GlobalHome(); err == nil {
-			viper.AddConfigPath(homeDir)
-		}
+	homeDir, err := config.GlobalHome()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: cannot resolve home directory: %v\n", err)
+		os.Exit(1)
 	}
 
-	_ = viper.BindEnv("provider", "WILDGECU_PROVIDER")
-	_ = viper.BindEnv("gemini_api_key", "GEMINI_API_KEY")
-	_ = viper.BindEnv("openai_api_key", "OPENAI_API_KEY")
-	_ = viper.BindEnv("ollama_base_url", "OLLAMA_BASE_URL")
-	viper.AutomaticEnv()
+	if err = config.LoadDotEnv(homeDir); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+	}
 
-	_ = viper.ReadInConfig()
+	cfgPath := filepath.Join(homeDir, "wildgecu.yaml")
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if modelFlag != "" {
+		if err := cfg.ValidateModelRef(modelFlag); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: --model: %v\n", err)
+			os.Exit(1)
+		}
+		cfg.DefaultModel = modelFlag
+	}
+
+	appConfig = cfg
 }
-
