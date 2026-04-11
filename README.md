@@ -91,24 +91,42 @@ cd wildgecu
 
 ### With Gemini (default)
 
+Set your API key (via shell export or `~/.wildgecu/.env` file):
+
 ```bash
 export GEMINI_API_KEY="your-api-key"
 go run .
 ```
 
-### With OpenAI
+On first run, WildGecu creates `~/.wildgecu/wildgecu.yaml` pre-configured for Gemini. To use other providers, edit the config file — see the [Configuration](#configuration) section.
 
-```bash
-export WILDGECU_PROVIDER=openai
-export OPENAI_API_KEY="your-api-key"
-go run . --model gpt-4o
+### With multiple providers
+
+Edit `~/.wildgecu/wildgecu.yaml` to add providers and model aliases:
+
+```yaml
+providers:
+  gemini:
+    type: gemini
+    api_key: env(GEMINI_API_KEY)
+  openai:
+    type: openai
+    api_key: env(OPENAI_API_KEY)
+  ollama:
+    type: ollama
+
+models:
+  fast: gemini/gemini-2.0-flash
+  local: ollama/llama3
+
+default_model: gemini/gemini-2.5-flash
 ```
 
-### With Ollama
+Then switch models at runtime with `--model`:
 
 ```bash
-export WILDGECU_PROVIDER=ollama
-go run . --model llama3
+go run . --model openai/gpt-4o
+go run . --model local            # uses the "local" alias → ollama/llama3
 ```
 
 Then bootstrap your agent's identity:
@@ -224,6 +242,7 @@ This allows running multiple independent instances, each with its own config, so
 | File / Directory | Purpose |
 | --- | --- |
 | `wildgecu.yaml` | Configuration (provider, API keys, model) — created on first run |
+| `.env` | Optional environment variables loaded at startup |
 | `wildgecu.pid` | Daemon PID file |
 | `wildgecu.sock` | Daemon Unix domain socket |
 | `wildgecu.log` | Daemon log file (JSON) |
@@ -241,26 +260,99 @@ This allows running multiple independent instances, each with its own config, so
 
 Delete `SOUL.md` and run `wildgecu init` again to give your agent a new identity.
 
-### Config file
+### Config file (`wildgecu.yaml`)
 
-The config file is searched in order: `./wildgecu.yaml`, then `~/.wildgecu/wildgecu.yaml`. Override with `--config`:
+On first run, WildGecu creates a default `~/.wildgecu/wildgecu.yaml`. Here is a full example showing all available options:
 
-```bash
-wildgecu --config /path/to/config.yaml
+```yaml
+providers:
+  gemini:
+    type: gemini
+    api_key: env(GEMINI_API_KEY)
+    google_search: true           # enable Gemini's Google Search grounding
+
+  openai:
+    type: openai
+    api_key: env(OPENAI_API_KEY)
+
+  ollama:
+    type: ollama                  # base_url defaults to http://localhost:11434/v1
+
+  mistral:
+    type: mistral                 # base_url defaults to https://api.mistral.ai/v1
+    api_key: env(MISTRAL_API_KEY)
+
+  regolo:
+    type: regolo                  # base_url defaults to https://api.regolo.ai/v1
+    api_key: env(REGOLO_API_KEY)
+
+  custom:
+    type: openai
+    api_key: env(CUSTOM_API_KEY)
+    base_url: "https://my-provider.example.com/v1"  # any OpenAI-compatible endpoint
+
+models:
+  fast: gemini/gemini-2.0-flash
+  smart: gemini/gemini-2.5-pro
+  local: ollama/llama3
+
+default_model: gemini/gemini-2.5-flash  # or use an alias: "fast"
+
+telegram_token: env(TELEGRAM_BOT_TOKEN) # optional, for the Telegram bridge
 ```
 
-Environment variables also work:
+**Key concepts:**
+
+- **`providers`** — a named map of LLM providers. Each entry requires a `type` field (`gemini`, `openai`, `ollama`, `mistral`, `regolo`). The name you give a provider is how you reference it elsewhere (e.g. `gemini/gemini-2.5-flash` means the provider named `gemini`, model `gemini-2.5-flash`).
+- **`models`** — optional aliases for `provider/model` pairs. Alias names must not contain `/`.
+- **`default_model`** — required. Can be a direct `provider/model` reference or an alias name.
+- **`telegram_token`** — optional. Token for the Telegram bot bridge.
+
+### `env()` syntax
+
+Config values can reference environment variables using the `env(VAR_NAME)` syntax:
+
+```yaml
+api_key: env(GEMINI_API_KEY)    # resolved from the GEMINI_API_KEY env var
+base_url: env(CUSTOM_URL)       # works for base_url too
+telegram_token: env(TG_TOKEN)   # and for telegram_token
+default_model: env(DEFAULT_MODEL) # and default_model
+```
+
+If the referenced variable is not set, WildGecu exits with an error naming the missing variable. This syntax works for `api_key`, `base_url`, `telegram_token`, and `default_model` fields.
+
+### `.env` file
+
+WildGecu automatically loads a `.env` file from the home directory (`~/.wildgecu/.env`) at startup. This is a convenient alternative to exporting variables in your shell profile:
 
 ```bash
-# Provider selection (default: gemini)
-export WILDGECU_PROVIDER="gemini"   # or "openai" or "ollama"
+# ~/.wildgecu/.env
+GEMINI_API_KEY=your-gemini-key
+OPENAI_API_KEY=your-openai-key
+TELEGRAM_BOT_TOKEN=your-bot-token
+```
 
-# API keys (set the one matching your provider)
-export GEMINI_API_KEY="your-key"
-export OPENAI_API_KEY="your-key"
+**Precedence:** environment variables already set in your shell take priority over values in the `.env` file. If the file does not exist, it is silently ignored.
 
-# Ollama settings (no API key needed)
-export OLLAMA_BASE_URL="http://localhost:11434/v1"  # default
+### Provider defaults
+
+Some provider types have built-in default base URLs, so you don't need to specify `base_url` for them:
+
+| Type | Default `base_url` |
+| --- | --- |
+| `ollama` | `http://localhost:11434/v1` |
+| `mistral` | `https://api.mistral.ai/v1` |
+| `regolo` | `https://api.regolo.ai/v1` |
+
+You can always override these by setting `base_url` explicitly. The `gemini` and `openai` types use their respective SDK defaults and don't need a base URL.
+
+### Config file search order
+
+The config file is loaded from `~/.wildgecu/wildgecu.yaml`. You can also override the model at runtime:
+
+```bash
+wildgecu --model gpt-4o          # override with a provider/model reference
+wildgecu --model fast             # or use a model alias
 ```
 
 ## Architecture
@@ -299,15 +391,17 @@ wildgecu.go                  # Entry point → cmd.Execute()
 
 ## Providers
 
-WildGecu ships with three providers:
+WildGecu ships with two provider implementations that cover multiple services:
 
-| Provider | Package | Streaming | Tool Calling | API Key Required |
-|----------|---------|-----------|--------------|------------------|
-| Google Gemini | `pkg/provider/gemini` | Yes | Yes | Yes |
-| OpenAI | `pkg/provider/openai` | Yes | Yes | Yes |
-| Ollama | `pkg/provider/openai` (shared) | Yes | Model-dependent | No |
+| Provider | Type | Package | Streaming | Tool Calling | API Key Required |
+|----------|------|---------|-----------|--------------|------------------|
+| Google Gemini | `gemini` | `pkg/provider/gemini` | Yes | Yes | Yes |
+| OpenAI | `openai` | `pkg/provider/openai` | Yes | Yes | Yes |
+| Ollama | `ollama` | `pkg/provider/openai` (shared) | Yes | Model-dependent | No |
+| Mistral | `mistral` | `pkg/provider/openai` (shared) | Yes | Yes | Yes |
+| Regolo | `regolo` | `pkg/provider/openai` (shared) | Yes | Yes | Yes |
 
-Ollama uses the same OpenAI-compatible implementation with a custom base URL.
+Ollama, Mistral, and Regolo use the OpenAI-compatible implementation with their respective default base URLs. Any OpenAI-compatible endpoint can be used by setting `type: openai` with a custom `base_url`.
 
 ### Adding a new provider
 
