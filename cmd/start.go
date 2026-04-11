@@ -10,7 +10,6 @@ import (
 	"wildgecu/x/config"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func init() {
@@ -66,11 +65,8 @@ func runDaemon() error {
 
 	return daemon.Run(context.Background(), daemon.Config{
 		Version:       Version,
-		Provider:      viper.GetString("provider"),
-		APIKey:        resolveAPIKey(),
-		Model:         viper.GetString("model"),
-		TelegramToken: viper.GetString("telegram_token"),
-		GoogleSearch:  viper.GetBool("google_search"),
-		OllamaURL:     viper.GetString("ollama_base_url"),
+		DefaultModel:  appConfig.DefaultModel,
+		TelegramToken: appConfig.TelegramToken,
+		Container:     newContainer(),
 	})
 }

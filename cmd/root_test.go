@@ -5,69 +5,80 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/spf13/viper"
+	"wildgecu/x/config"
 )
 
 func TestInitConfig(t *testing.T) {
-	t.Run("IgnoresCurrentDirectory", func(t *testing.T) {
-		// Create a wildgecu.yaml in a temp dir that should NOT be picked up.
-		tmpDir := t.TempDir()
-
-		cfgContent := []byte("gemini_api_key: from-local-dir\nmodel: local-model\n")
-		if err := os.WriteFile(filepath.Join(tmpDir, "wildgecu.yaml"), cfgContent, 0o644); err != nil {
-			t.Fatal(err)
-		}
-
-		origDir, err := os.Getwd()
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { os.Chdir(origDir) })
-
-		if err := os.Chdir(tmpDir); err != nil {
-			t.Fatal(err)
-		}
-
-		// Reset viper and global state, then run initConfig.
-		viper.Reset()
-		cfgFile = ""
-		initConfig()
-
-		// The local directory config should NOT have been loaded.
-		if got := viper.GetString("gemini_api_key"); got == "from-local-dir" {
-			t.Error("initConfig loaded config from current directory; expected it to only use global home")
-		}
-
-		if got := viper.GetString("model"); got == "local-model" {
-			t.Error("initConfig loaded model from current directory; expected it to only use global home")
-		}
-	})
-
 	t.Run("LoadsFromGlobalHome", func(t *testing.T) {
-		// Override HOME so GlobalHome() creates config in a temp dir.
 		tmpHome := t.TempDir()
 		t.Setenv("HOME", tmpHome)
+
+		// Reset global state.
+		config.SetGlobalHome("")
+		homeFlag = ""
+		appConfig = nil
 
 		globalDir := filepath.Join(tmpHome, ".wildgecu")
 		if err := os.MkdirAll(globalDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
 
-		cfgContent := []byte("gemini_api_key: from-global-home\nmodel: global-model\n")
+		cfgContent := []byte(`providers:
+  gemini:
+    type: gemini
+    api_key: from-global-home
+default_model: gemini/global-model
+`)
 		if err := os.WriteFile(filepath.Join(globalDir, "wildgecu.yaml"), cfgContent, 0o644); err != nil {
 			t.Fatal(err)
 		}
 
-		viper.Reset()
-		cfgFile = ""
 		initConfig()
 
-		if got := viper.GetString("gemini_api_key"); got != "from-global-home" {
-			t.Errorf("gemini_api_key = %q, want %q", got, "from-global-home")
+		if appConfig == nil {
+			t.Fatal("appConfig is nil after initConfig")
 		}
 
-		if got := viper.GetString("model"); got != "global-model" {
-			t.Errorf("model = %q, want %q", got, "global-model")
+		if appConfig.DefaultModel != "gemini/global-model" {
+			t.Errorf("DefaultModel = %q, want %q", appConfig.DefaultModel, "gemini/global-model")
+		}
+
+		g, ok := appConfig.Providers["gemini"]
+		if !ok {
+			t.Fatal("gemini provider not found in config")
+		}
+		if g.APIKey != "from-global-home" {
+			t.Errorf("gemini.APIKey = %q, want %q", g.APIKey, "from-global-home")
+		}
+	})
+
+	t.Run("HomeOverrideLoadsDifferentConfig", func(t *testing.T) {
+		tmpHome := t.TempDir()
+		customHome := t.TempDir()
+
+		t.Setenv("HOME", tmpHome)
+		config.SetGlobalHome("")
+		homeFlag = customHome
+		appConfig = nil
+
+		cfgContent := []byte(`providers:
+  openai:
+    type: openai
+    api_key: custom-key
+default_model: openai/gpt-4o
+`)
+		if err := os.WriteFile(filepath.Join(customHome, "wildgecu.yaml"), cfgContent, 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		initConfig()
+
+		if appConfig == nil {
+			t.Fatal("appConfig is nil after initConfig")
+		}
+
+		if appConfig.DefaultModel != "openai/gpt-4o" {
+			t.Errorf("DefaultModel = %q, want %q", appConfig.DefaultModel, "openai/gpt-4o")
 		}
 	})
 }

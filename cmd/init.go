@@ -10,11 +10,9 @@ import (
 
 	"wildgecu/pkg/agent"
 	"wildgecu/pkg/provider"
-	"wildgecu/pkg/provider/factory"
 	"wildgecu/pkg/session"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func init() {
@@ -28,12 +26,6 @@ var initCmd = &cobra.Command{
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
-	providerName := viper.GetString("provider")
-	apiKey := resolveAPIKey()
-	if apiKey == "" && providerName != "ollama" {
-		return fmt.Errorf("API key not set for provider %q; configure it in your config file or environment", providerName)
-	}
-
 	h, err := newHome()
 	if err != nil {
 		return err
@@ -50,13 +42,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 
-	p, err := factory.New(ctx, factory.Config{
-		Provider:     providerName,
-		Model:        viper.GetString("model"),
-		APIKey:       apiKey,
-		GoogleSearch: viper.GetBool("google_search"),
-		OllamaURL:    viper.GetString("ollama_base_url"),
-	})
+	c := newContainer()
+	p, err := c.Get(ctx, appConfig.DefaultModel)
 	if err != nil {
 		return fmt.Errorf("provider: %w", err)
 	}

@@ -16,20 +16,17 @@ import (
 	"wildgecu/pkg/command"
 	"wildgecu/pkg/cron"
 	"wildgecu/pkg/home"
-	"wildgecu/pkg/provider/factory"
 	"wildgecu/pkg/telegram/auth"
 	"wildgecu/x/config"
+	"wildgecu/x/container"
 )
 
 // Config holds daemon configuration.
 type Config struct {
 	Version       string
-	Provider      string // "gemini", "openai", or "ollama"
-	APIKey        string
-	Model         string
+	DefaultModel  string
 	TelegramToken string
-	GoogleSearch  bool
-	OllamaURL     string
+	Container     *container.Container
 }
 
 // Run is the main daemon loop. It manages the PID file, socket server, watchdog,
@@ -56,10 +53,6 @@ func Run(ctx context.Context, cfg Config) error {
 	wd := NewWatchdog(logger)
 
 	// --- Home directory initialization ---
-	if cfg.APIKey == "" && cfg.Provider != "ollama" {
-		return fmt.Errorf("API key not set for provider %q; configure it in your config file or environment", cfg.Provider)
-	}
-
 	globalHome, err := config.GlobalHome()
 	if err != nil {
 		return fmt.Errorf("global home: %w", err)
@@ -118,8 +111,8 @@ func Run(ctx context.Context, cfg Config) error {
 			MessageCount: len(sess.Messages),
 			ToolCalls:    toolCalls,
 			SkillsLoaded: len(uniqueSkills),
-			Provider:     cfg.Provider,
-			Model:        cfg.Model,
+			Provider:     cfg.DefaultModel,
+			Model:        cfg.DefaultModel,
 			Uptime:       time.Since(sess.createdAt),
 		}, nil
 	})
@@ -193,14 +186,14 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	// --- Cron scheduler initialization ---
-	if h != nil {
-		p, err := factory.New(ctx, cfg.factoryConfig())
+	if h != nil && cfg.Container != nil {
+		cronProvider, err := cfg.Container.Get(ctx, cfg.DefaultModel)
 		if err != nil {
-			return fmt.Errorf("provider: %w", err)
+			return fmt.Errorf("cron provider: %w", err)
 		}
 
 		execCfg := &cron.ExecutorConfig{
-			Provider: p,
+			Provider: cronProvider,
 			Results:  h.CronResultsDir(),
 			Logger:   logger,
 		}
@@ -221,7 +214,7 @@ func Run(ctx context.Context, cfg Config) error {
 			return &Response{OK: true, Payload: "cron jobs reloaded"}, nil
 		})
 	} else {
-		logger.Info("cron scheduler disabled (no API key configured)")
+		logger.Info("cron scheduler disabled (no provider configured)")
 	}
 
 	// --- Start socket server and watchdog ---
@@ -297,20 +290,9 @@ func Run(ctx context.Context, cfg Config) error {
 	return nil
 }
 
-// factoryConfig returns a factory.Config from the daemon Config.
-func (c Config) factoryConfig() factory.Config {
-	return factory.Config{
-		Provider:     c.Provider,
-		Model:        c.Model,
-		APIKey:       c.APIKey,
-		GoogleSearch: c.GoogleSearch,
-		OllamaURL:    c.OllamaURL,
-	}
-}
-
 // initSessionManager creates the agent config and initializes the session manager.
 func initSessionManager(ctx context.Context, cfg Config, h *home.Home, tgAuth *auth.Store, _ *slog.Logger) (*SessionManager, error) {
-	p, err := factory.New(ctx, cfg.factoryConfig())
+	p, err := cfg.Container.Get(ctx, cfg.DefaultModel)
 	if err != nil {
 		return nil, fmt.Errorf("provider: %w", err)
 	}

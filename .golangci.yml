@@ -36,9 +36,6 @@ linters:
         - os.Remove
         - (*os.Process).Release
         - (*encoding/json.Encoder).Encode
-        - (*github.com/spf13/viper.Viper).BindEnv
-        - github.com/spf13/viper.BindEnv
-        - github.com/spf13/viper.ReadInConfig
         - (*github.com/spf13/pflag.FlagSet).MarkHidden
     govet:
       enable-all: true
