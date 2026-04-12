@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"github.com/ludusrusso/wildgecu/x/setup"
 
 	"github.com/spf13/cobra"
+	"google.golang.org/genai"
 )
 
 // Version, Commit, and Date are set via -ldflags at build time.
@@ -137,9 +139,14 @@ func ensureAppConfig() (*setup.Result, error) {
 		return nil, err
 	}
 
-	result, err := setup.Run(homeDir, os.Stdin, os.Stdout)
+	result, err := setup.Run(homeDir, os.Stdin, os.Stdout, setup.WithValidator(validateProvider))
 	if err != nil {
 		return nil, fmt.Errorf("setup: %w", err)
+	}
+
+	// Re-load .env since setup may have written API keys.
+	if err := config.LoadDotEnv(homeDir); err != nil {
+		return nil, err
 	}
 
 	cfgPath := filepath.Join(homeDir, "wildgecu.yaml")
@@ -148,4 +155,25 @@ func ensureAppConfig() (*setup.Result, error) {
 	}
 
 	return result, nil
+}
+
+// validateProvider checks provider connectivity by making a lightweight API call.
+func validateProvider(providerType, apiKey, baseURL string) error {
+	ctx := context.Background()
+	switch providerType {
+	case "gemini":
+		client, err := genai.NewClient(ctx, &genai.ClientConfig{
+			APIKey:  apiKey,
+			Backend: genai.BackendGeminiAPI,
+		})
+		if err != nil {
+			return fmt.Errorf("create client: %w", err)
+		}
+		for _, err := range client.Models.All(ctx) {
+			return err
+		}
+		return nil
+	default:
+		return nil
+	}
 }

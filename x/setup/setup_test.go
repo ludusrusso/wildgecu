@@ -2,11 +2,13 @@ package setup
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/joho/godotenv"
 	"github.com/ludusrusso/wildgecu/x/config"
 )
 
@@ -30,6 +32,9 @@ func TestRun(t *testing.T) {
 		}
 		if result.Model != "llama3.3" {
 			t.Errorf("Model = %q, want %q", result.Model, "llama3.3")
+		}
+		if result.EnvFilePath != "" {
+			t.Errorf("EnvFilePath = %q, want empty (Ollama has no API key)", result.EnvFilePath)
 		}
 		// Verify the written config can be loaded.
 		cfg := loadTestConfig(t, homeDir)
@@ -118,8 +123,8 @@ func TestRun(t *testing.T) {
 
 	t.Run("UnsupportedProviderThenOllama", func(t *testing.T) {
 		homeDir := t.TempDir()
-		// First pick Gemini (1, unsupported), then Ollama (3), accept defaults.
-		stdin := strings.NewReader("1\n3\n\n\n")
+		// First pick OpenAI (2, unsupported), then Ollama (3), accept defaults.
+		stdin := strings.NewReader("2\n3\n\n\n")
 		var stdout bytes.Buffer
 
 		result, err := Run(homeDir, stdin, &stdout)
@@ -133,7 +138,7 @@ func TestRun(t *testing.T) {
 
 		output := stdout.String()
 		if !strings.Contains(output, "not yet supported") {
-			t.Error("expected 'not yet supported' message for Gemini")
+			t.Error("expected 'not yet supported' message for OpenAI")
 		}
 	})
 
@@ -206,6 +211,195 @@ func TestRun(t *testing.T) {
 			t.Errorf("error = %q, want it to contain 'cancelled'", err.Error())
 		}
 	})
+
+	t.Run("GeminiWithDefaults", func(t *testing.T) {
+		homeDir := t.TempDir()
+		// Select Gemini (1), API key, no google_search, default model.
+		stdin := strings.NewReader("1\ntest-key-123\n\n\n")
+		var stdout bytes.Buffer
+
+		validator := func(_, _, _ string) error { return nil }
+
+		result, err := Run(homeDir, stdin, &stdout, WithValidator(validator))
+		if err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+
+		if result.ProviderType != "gemini" {
+			t.Errorf("ProviderType = %q, want %q", result.ProviderType, "gemini")
+		}
+		if result.Model != "gemini-2.5-flash" {
+			t.Errorf("Model = %q, want %q", result.Model, "gemini-2.5-flash")
+		}
+		if result.EnvFilePath == "" {
+			t.Error("EnvFilePath should not be empty for Gemini")
+		}
+
+		// Verify .env file content.
+		envMap, err := godotenv.Read(filepath.Join(homeDir, ".env"))
+		if err != nil {
+			t.Fatalf("read .env: %v", err)
+		}
+		if envMap["GEMINI_API_KEY"] != "test-key-123" {
+			t.Errorf("GEMINI_API_KEY = %q, want %q", envMap["GEMINI_API_KEY"], "test-key-123")
+		}
+
+		// Verify YAML contains env() reference, not raw key.
+		data, err := os.ReadFile(filepath.Join(homeDir, "wildgecu.yaml"))
+		if err != nil {
+			t.Fatalf("read config: %v", err)
+		}
+		if !strings.Contains(string(data), "env(GEMINI_API_KEY)") {
+			t.Errorf("YAML should contain env(GEMINI_API_KEY), got:\n%s", data)
+		}
+		if strings.Contains(string(data), "test-key-123") {
+			t.Error("YAML should not contain raw API key")
+		}
+
+		// Verify config loads with env var set.
+		t.Setenv("GEMINI_API_KEY", "test-key-123")
+		cfg := loadTestConfig(t, homeDir)
+		if cfg.DefaultModel != "base" {
+			t.Errorf("DefaultModel = %q, want %q", cfg.DefaultModel, "base")
+		}
+		if cfg.Models["base"] != "gemini/gemini-2.5-flash" {
+			t.Errorf("Models[base] = %q, want %q", cfg.Models["base"], "gemini/gemini-2.5-flash")
+		}
+
+		p, ok := cfg.Providers["gemini"]
+		if !ok {
+			t.Fatal("provider 'gemini' not found in config")
+		}
+		if p.Type != "gemini" {
+			t.Errorf("gemini.Type = %q, want %q", p.Type, "gemini")
+		}
+		if p.APIKey != "test-key-123" {
+			t.Errorf("gemini.APIKey = %q, want %q (resolved)", p.APIKey, "test-key-123")
+		}
+		if p.GoogleSearch {
+			t.Error("gemini.GoogleSearch should be false")
+		}
+	})
+
+	t.Run("GeminiWithGoogleSearch", func(t *testing.T) {
+		homeDir := t.TempDir()
+		// Gemini (1), API key, enable google_search (y), default model.
+		stdin := strings.NewReader("1\ntest-key-456\ny\n\n")
+		var stdout bytes.Buffer
+
+		validator := func(_, _, _ string) error { return nil }
+
+		result, err := Run(homeDir, stdin, &stdout, WithValidator(validator))
+		if err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+
+		if result.ProviderType != "gemini" {
+			t.Errorf("ProviderType = %q, want %q", result.ProviderType, "gemini")
+		}
+
+		// Verify YAML has google_search.
+		data, err := os.ReadFile(filepath.Join(homeDir, "wildgecu.yaml"))
+		if err != nil {
+			t.Fatalf("read config: %v", err)
+		}
+		if !strings.Contains(string(data), "google_search") {
+			t.Errorf("YAML should contain google_search, got:\n%s", data)
+		}
+
+		t.Setenv("GEMINI_API_KEY", "test-key-456")
+		cfg := loadTestConfig(t, homeDir)
+		if !cfg.Providers["gemini"].GoogleSearch {
+			t.Error("gemini.GoogleSearch should be true")
+		}
+	})
+
+	t.Run("GeminiValidationFailureThenRetry", func(t *testing.T) {
+		homeDir := t.TempDir()
+		// Gemini (1), bad key, no google_search, (validation fails),
+		// good key (validation succeeds), default model.
+		stdin := strings.NewReader("1\nbad-key\n\ngood-key\n\n")
+		var stdout bytes.Buffer
+
+		calls := 0
+		validator := func(_, apiKey, _ string) error {
+			calls++
+			if apiKey == "bad-key" {
+				return fmt.Errorf("invalid API key")
+			}
+			return nil
+		}
+
+		result, err := Run(homeDir, stdin, &stdout, WithValidator(validator))
+		if err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+
+		if calls != 2 {
+			t.Errorf("validator called %d times, want 2", calls)
+		}
+
+		output := stdout.String()
+		if !strings.Contains(output, "Validation failed") {
+			t.Error("output should contain 'Validation failed'")
+		}
+		if !strings.Contains(output, "invalid API key") {
+			t.Error("output should contain the validation error message")
+		}
+
+		// Verify the good key was stored.
+		envMap, err := godotenv.Read(filepath.Join(homeDir, ".env"))
+		if err != nil {
+			t.Fatalf("read .env: %v", err)
+		}
+		if envMap["GEMINI_API_KEY"] != "good-key" {
+			t.Errorf("GEMINI_API_KEY = %q, want %q", envMap["GEMINI_API_KEY"], "good-key")
+		}
+
+		if result.Model != "gemini-2.5-flash" {
+			t.Errorf("Model = %q, want %q", result.Model, "gemini-2.5-flash")
+		}
+	})
+
+	t.Run("GeminiEOFDuringAPIKeyPrompt", func(t *testing.T) {
+		homeDir := t.TempDir()
+		// Select Gemini (1), then EOF during API key prompt.
+		stdin := strings.NewReader("1\n")
+		var stdout bytes.Buffer
+
+		_, err := Run(homeDir, stdin, &stdout)
+		if err == nil {
+			t.Fatal("Run() expected error on EOF, got nil")
+		}
+		if !strings.Contains(err.Error(), "cancelled") {
+			t.Errorf("error = %q, want it to contain 'cancelled'", err.Error())
+		}
+	})
+
+	t.Run("GeminiNoValidatorSkipsValidation", func(t *testing.T) {
+		homeDir := t.TempDir()
+		// Gemini (1), API key, no google_search, default model. No validator passed.
+		stdin := strings.NewReader("1\nany-key\n\n\n")
+		var stdout bytes.Buffer
+
+		result, err := Run(homeDir, stdin, &stdout)
+		if err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+
+		if result.ProviderType != "gemini" {
+			t.Errorf("ProviderType = %q, want %q", result.ProviderType, "gemini")
+		}
+
+		// Verify .env was still written.
+		envMap, err := godotenv.Read(filepath.Join(homeDir, ".env"))
+		if err != nil {
+			t.Fatalf("read .env: %v", err)
+		}
+		if envMap["GEMINI_API_KEY"] != "any-key" {
+			t.Errorf("GEMINI_API_KEY = %q, want %q", envMap["GEMINI_API_KEY"], "any-key")
+		}
+	})
 }
 
 func TestFormatSummary(t *testing.T) {
@@ -238,6 +432,24 @@ func TestFormatSummary(t *testing.T) {
 		summary := FormatSummary(r)
 		if strings.Contains(summary, "Base URL") {
 			t.Error("summary should not include Base URL when empty")
+		}
+	})
+
+	t.Run("IncludesSecretsPath", func(t *testing.T) {
+		r := &Result{
+			ProviderName: "Gemini",
+			ProviderType: "gemini",
+			Model:        "gemini-2.5-flash",
+			ConfigPath:   "/home/user/.wildgecu/wildgecu.yaml",
+			EnvFilePath:  "/home/user/.wildgecu/.env",
+		}
+
+		summary := FormatSummary(r)
+		if !strings.Contains(summary, "/home/user/.wildgecu/.env") {
+			t.Errorf("summary missing env file path:\n%s", summary)
+		}
+		if !strings.Contains(summary, "Secrets") {
+			t.Errorf("summary missing 'Secrets' label:\n%s", summary)
 		}
 	})
 }
