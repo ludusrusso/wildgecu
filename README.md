@@ -99,10 +99,12 @@ wildgecu init:                          wildgecu chat / code:
 ## Prerequisites
 
 - Go 1.26+
-- At least one LLM provider configured:
-  - [Google Gemini API key](https://aistudio.google.com/apikey) (default)
+- At least one LLM provider:
+  - [Google Gemini API key](https://aistudio.google.com/apikey)
   - [OpenAI API key](https://platform.openai.com/api-keys)
   - [Ollama](https://ollama.com/) running locally (no API key needed)
+  - [Mistral API key](https://console.mistral.ai/api-keys)
+  - [Regolo API key](https://regolo.ai/)
 
 ## Getting started
 
@@ -122,38 +124,72 @@ Optionally move it to a directory on your `$PATH`:
 mv wildgecu /usr/local/bin/
 ```
 
-### 2. Create the configuration directory
+### 2. Run WildGecu
 
-WildGecu stores all global state in `~/.wildgecu/`. The directory is created automatically on first run, but you can set it up manually to prepare your config and secrets beforehand:
+On first run, an interactive setup wizard guides you through provider selection, API key entry, and model choice:
 
 ```bash
-mkdir -p ~/.wildgecu
+wildgecu init
 ```
 
-### 3. Add your API keys (`.env` file)
+The wizard will:
+1. Ask you to choose a provider (Gemini, OpenAI, Ollama, Mistral, or Regolo)
+2. Prompt for your API key (if required by the provider) and validate it
+3. Let you pick a default model from a curated list or enter a custom one
+4. Write `~/.wildgecu/wildgecu.yaml` and `~/.wildgecu/.env` automatically
 
-Create a `.env` file to store your provider API keys. This keeps secrets out of the YAML config:
+After setup, the `init` command continues into the bootstrap interview where the agent asks about its name, purpose, personality, and expertise, then persists its identity to `.wildgecu/SOUL.md` in your current working directory.
+
+> **Tip:** The setup wizard also triggers automatically on `wildgecu start` if no config exists yet.
+
+### 3. Start chatting
+
+```bash
+wildgecu            # interactive chat (default command)
+wildgecu code       # coding agent scoped to the current directory
+```
+
+Switch models at runtime with `--model`:
+
+```bash
+wildgecu --model openai/gpt-4o
+wildgecu --model local              # uses the "local" alias → ollama/llama3
+```
+
+### Verify your setup
+
+After completing the steps above, your file tree should look like this:
+
+```
+~/.wildgecu/                    # global home
+├── .env                        # API keys (created by setup wizard)
+└── wildgecu.yaml               # config (created by setup wizard)
+
+./.wildgecu/                    # project-local (in your working directory)
+└── SOUL.md                     # agent identity (created by init)
+```
+
+If something is wrong, WildGecu will tell you — missing API keys, unknown providers, or invalid model references all produce clear error messages at startup.
+
+### Manual configuration (advanced)
+
+If you prefer to skip the wizard and configure manually, create the files yourself before running any command.
+
+**`.env` file** — store provider API keys:
 
 ```bash
 cat > ~/.wildgecu/.env << 'EOF'
-# Required: at least one provider key
 GEMINI_API_KEY=your-gemini-api-key
-
-# Optional: add more providers as needed
 # OPENAI_API_KEY=your-openai-api-key
 # MISTRAL_API_KEY=your-mistral-api-key
 # REGOLO_API_KEY=your-regolo-api-key
-
-# Optional: Telegram bot bridge
 # TELEGRAM_BOT_TOKEN=your-bot-token
 EOF
 ```
 
 > **Tip:** Environment variables already set in your shell take priority over values in `.env`.
 
-### 4. Create the config file (`wildgecu.yaml`)
-
-If you skip this step, WildGecu auto-generates a default Gemini config on first run. To customize it upfront, create `~/.wildgecu/wildgecu.yaml`:
+**`wildgecu.yaml`** — provider and model configuration:
 
 #### Minimal setup (Gemini only)
 
@@ -191,45 +227,6 @@ default_model: gemini/gemini-2.5-flash
 ```
 
 The `env(VAR_NAME)` syntax resolves values from your `.env` file or shell environment. If a referenced variable is missing, WildGecu exits with an error naming the unset variable.
-
-### 5. Bootstrap your agent's identity
-
-Run the `init` command to create your agent's personality through an interactive interview:
-
-```bash
-wildgecu init
-```
-
-The agent will ask about its name, purpose, personality, and expertise. When the conversation ends, it persists the identity to `.wildgecu/SOUL.md` in your current working directory.
-
-### 6. Start chatting
-
-```bash
-wildgecu            # interactive chat (default command)
-wildgecu code       # coding agent scoped to the current directory
-```
-
-Switch models at runtime with `--model`:
-
-```bash
-wildgecu --model openai/gpt-4o
-wildgecu --model local              # uses the "local" alias → ollama/llama3
-```
-
-### Verify your setup
-
-After completing the steps above, your file tree should look like this:
-
-```
-~/.wildgecu/                    # global home
-├── .env                        # API keys (step 3)
-└── wildgecu.yaml               # config (step 4, or auto-generated)
-
-./.wildgecu/                    # project-local (in your working directory)
-└── SOUL.md                     # agent identity (step 5)
-```
-
-If something is wrong, WildGecu will tell you — missing API keys, unknown providers, or invalid model references all produce clear error messages at startup.
 
 ## CLI commands
 
