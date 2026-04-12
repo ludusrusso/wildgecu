@@ -26,6 +26,11 @@ var initCmd = &cobra.Command{
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
+	// Trigger interactive setup if no config exists yet.
+	if _, err := ensureAppConfig(); err != nil {
+		return err
+	}
+
 	h, err := newHome()
 	if err != nil {
 		return err

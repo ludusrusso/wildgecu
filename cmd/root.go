@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,8 +11,10 @@ import (
 	"github.com/ludusrusso/wildgecu/pkg/home"
 	"github.com/ludusrusso/wildgecu/x/config"
 	"github.com/ludusrusso/wildgecu/x/container"
+	"github.com/ludusrusso/wildgecu/x/setup"
 
 	"github.com/spf13/cobra"
+	"google.golang.org/genai"
 )
 
 // Version, Commit, and Date are set via -ldflags at build time.
@@ -92,19 +96,84 @@ func initConfig() {
 	}
 
 	cfgPath := filepath.Join(homeDir, "wildgecu.yaml")
-	cfg, err := config.Load(cfgPath)
-	if err != nil {
+	if err = loadAndSetConfig(cfgPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return // no config yet; ensureAppConfig will handle it
+		}
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
+	}
+}
+
+// loadAndSetConfig loads the config from cfgPath, applies the --model flag
+// override, and sets appConfig. The underlying os.ErrNotExist is preserved
+// in the returned error so callers can distinguish "file missing" from
+// broken config.
+func loadAndSetConfig(cfgPath string) error {
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		return err
 	}
 
 	if modelFlag != "" {
 		if err := cfg.ValidateModelRef(modelFlag); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: --model: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("--model: %w", err)
 		}
 		cfg.DefaultModel = modelFlag
 	}
 
 	appConfig = cfg
+	return nil
+}
+
+// ensureAppConfig runs the interactive setup if no config was loaded, then
+// loads the newly created config. Returns the setup result if setup ran,
+// or nil if config already existed.
+func ensureAppConfig() (*setup.Result, error) {
+	if appConfig != nil {
+		return nil, nil
+	}
+
+	homeDir, err := config.GlobalHome()
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := setup.Run(homeDir, os.Stdin, os.Stdout, setup.WithValidator(validateProvider))
+	if err != nil {
+		return nil, fmt.Errorf("setup: %w", err)
+	}
+
+	// Re-load .env since setup may have written API keys.
+	if err := config.LoadDotEnv(homeDir); err != nil {
+		return nil, err
+	}
+
+	cfgPath := filepath.Join(homeDir, "wildgecu.yaml")
+	if err := loadAndSetConfig(cfgPath); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// validateProvider checks provider connectivity by making a lightweight API call.
+func validateProvider(providerType, apiKey, baseURL string) error {
+	ctx := context.Background()
+	switch providerType {
+	case "gemini":
+		client, err := genai.NewClient(ctx, &genai.ClientConfig{
+			APIKey:  apiKey,
+			Backend: genai.BackendGeminiAPI,
+		})
+		if err != nil {
+			return fmt.Errorf("create client: %w", err)
+		}
+		for _, err := range client.Models.All(ctx) {
+			return err
+		}
+		return nil
+	default:
+		return nil
+	}
 }
