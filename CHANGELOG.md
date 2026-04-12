@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/ludusrusso/wildgecu/compare/v1.1.0...v1.2.0) (2026-04-12)
+
+
+### Features
+
+* **setup:** interactive first-run setup wizard for LLM providers ([#59](https://github.com/ludusrusso/wildgecu/issues/59)) ([c9b0cbe](https://github.com/ludusrusso/wildgecu/commit/c9b0cbefcde17d894714b03d196c146959d65733))
+
 ## [1.1.0](https://github.com/ludusrusso/wildgecu/compare/v1.0.0...v1.1.0) (2026-04-11)
 
 
