@@ -90,7 +90,8 @@ func (c *Config) resolveEnv() error {
 	return nil
 }
 
-var knownBaseURLs = map[string]string{
+// KnownBaseURLs maps provider types to their default base URLs.
+var KnownBaseURLs = map[string]string{
 	"mistral": "https://api.mistral.ai/v1",
 	"regolo":  "https://api.regolo.ai/v1",
 	"ollama":  "http://localhost:11434/v1",
@@ -99,7 +100,7 @@ var knownBaseURLs = map[string]string{
 func (c *Config) applyProviderDefaults() {
 	for name, p := range c.Providers {
 		if p.BaseURL == "" {
-			if defaultURL, ok := knownBaseURLs[p.Type]; ok {
+			if defaultURL, ok := KnownBaseURLs[p.Type]; ok {
 				p.BaseURL = defaultURL
 				c.Providers[name] = p
 			}

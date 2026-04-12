@@ -8,6 +8,7 @@ import (
 
 	"github.com/ludusrusso/wildgecu/pkg/daemon"
 	"github.com/ludusrusso/wildgecu/x/config"
+	"github.com/ludusrusso/wildgecu/x/setup"
 
 	"github.com/spf13/cobra"
 )
@@ -28,6 +29,14 @@ func startCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if isDaemon {
 				return runDaemon()
+			}
+			// Trigger interactive setup if no config exists yet.
+			result, err := ensureAppConfig()
+			if err != nil {
+				return err
+			}
+			if result != nil {
+				fmt.Print(setup.FormatSummary(result))
 			}
 			if system && homeFlag != "" {
 				return fmt.Errorf("--home is not compatible with --system; the system service manager cannot forward custom flags")
