@@ -21,6 +21,7 @@ func TestRunCronLs(t *testing.T) {
 				Schedule: "0 9 * * *",
 				Status:   cron.StatusRunning,
 				Prompt:   "say hello",
+				Timeout:  "30m0s",
 				NextRun:  "2026-04-20T09:00:00Z",
 				LastRun:  "2026-04-19T09:00:00Z",
 			},
@@ -53,8 +54,8 @@ func TestRunCronLs(t *testing.T) {
 		}
 
 		out := stdout.String()
-		for _, want := range []string{"NAME", "SCHEDULE", "STATUS", "LAST RUN", "NEXT RUN", "PROMPT",
-			"active", "running", "paused", "suspended", "broken", "error: missing schedule"} {
+		for _, want := range []string{"NAME", "SCHEDULE", "STATUS", "TIMEOUT", "LAST RUN", "NEXT RUN", "PROMPT",
+			"active", "running", "30m0s", "paused", "suspended", "broken", "error: missing schedule"} {
 			if !strings.Contains(out, want) {
 				t.Errorf("output missing %q:\n%s", want, out)
 			}

@@ -97,12 +97,14 @@ func renderJobList(out io.Writer, jobs []cron.JobInfo) error {
 	}
 
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tSCHEDULE\tSTATUS\tLAST RUN\tNEXT RUN\tPROMPT")
-	for _, j := range jobs {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+	fmt.Fprintln(w, "NAME\tSCHEDULE\tSTATUS\tTIMEOUT\tLAST RUN\tNEXT RUN\tPROMPT")
+	for i := range jobs {
+		j := &jobs[i]
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 			j.Name,
 			dashIfEmpty(j.Schedule),
 			statusCell(j),
+			dashIfEmpty(j.Timeout),
 			formatTimeCell(j.LastRun),
 			formatTimeCell(j.NextRun),
 			truncPrompt(j.Prompt),
@@ -126,18 +128,22 @@ func renderFilesystemFallback(stdout, stderr io.Writer, dir string) error {
 	}
 
 	w := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tSCHEDULE\tSTATUS\tPROMPT")
+	fmt.Fprintln(w, "NAME\tSCHEDULE\tSTATUS\tTIMEOUT\tPROMPT")
 	for _, r := range results {
 		if r.Err != nil {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", r.Name, "-", "(daemon offline)", "")
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.Name, "-", "(daemon offline)", "-", "")
 			continue
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", r.Job.Name, r.Job.Schedule, "(daemon offline)", truncPrompt(r.Job.Prompt))
+		timeout := ""
+		if r.Job.Timeout > 0 {
+			timeout = r.Job.Timeout.String()
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.Job.Name, r.Job.Schedule, "(daemon offline)", dashIfEmpty(timeout), truncPrompt(r.Job.Prompt))
 	}
 	return w.Flush()
 }
 
-func statusCell(j cron.JobInfo) string {
+func statusCell(j *cron.JobInfo) string {
 	if j.Status == cron.StatusError && j.Error != "" {
 		return fmt.Sprintf("error: %s", j.Error)
 	}

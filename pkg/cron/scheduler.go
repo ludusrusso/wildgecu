@@ -33,6 +33,7 @@ type jobEntry struct {
 	name     string
 	schedule string
 	prompt   string
+	timeout  time.Duration
 	status   JobStatus
 	errMsg   string
 	gJob     gocron.Job
@@ -95,11 +96,13 @@ func (s *Scheduler) rebuildEntries(ctx context.Context) int {
 		case r.Job.Suspended:
 			e.schedule = r.Job.Schedule
 			e.prompt = r.Job.Prompt
+			e.timeout = r.Job.Timeout
 			e.status = StatusSuspended
 			s.logger.Info("cron job suspended", "name", e.name)
 		default:
 			e.schedule = r.Job.Schedule
 			e.prompt = r.Job.Prompt
+			e.timeout = r.Job.Timeout
 			gJob, err := s.addJob(ctx, r.Job)
 			if err != nil {
 				e.status = StatusError
@@ -136,6 +139,7 @@ type JobInfo struct {
 	Schedule string    `json:"schedule,omitempty"`
 	Status   JobStatus `json:"status"`
 	Prompt   string    `json:"prompt,omitempty"`
+	Timeout  string    `json:"timeout,omitempty"`
 	NextRun  string    `json:"next_run,omitempty"`
 	LastRun  string    `json:"last_run,omitempty"`
 	Error    string    `json:"error,omitempty"`
@@ -154,6 +158,9 @@ func (s *Scheduler) ListJobs() []JobInfo {
 			Status:   e.status,
 			Prompt:   e.prompt,
 			Error:    e.errMsg,
+		}
+		if e.timeout > 0 {
+			info.Timeout = e.timeout.String()
 		}
 		if e.gJob != nil {
 			if next, err := e.gJob.NextRun(); err == nil && !next.IsZero() {

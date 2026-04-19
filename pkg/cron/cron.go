@@ -6,16 +6,18 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"go.yaml.in/yaml/v3"
 )
 
 // CronJob represents a scheduled LLM prompt.
 type CronJob struct {
-	Name      string `yaml:"name"`
-	Schedule  string `yaml:"cron"`
-	Suspended bool   `yaml:"suspended,omitempty"`
-	Prompt    string `yaml:"-"`
+	Name      string        `yaml:"name"`
+	Schedule  string        `yaml:"cron"`
+	Suspended bool          `yaml:"suspended,omitempty"`
+	Timeout   time.Duration `yaml:"-"`
+	Prompt    string        `yaml:"-"`
 }
 
 // Parse parses a cron job from a markdown file with YAML frontmatter.
@@ -43,19 +45,39 @@ func Parse(data []byte) (*CronJob, error) {
 	frontmatter := rest[:idx]
 	body := strings.TrimSpace(rest[idx+4:]) // skip "\n---"
 
-	var job CronJob
-	if err := yaml.Unmarshal([]byte(frontmatter), &job); err != nil {
+	var raw struct {
+		Name      string `yaml:"name"`
+		Schedule  string `yaml:"cron"`
+		Suspended bool   `yaml:"suspended,omitempty"`
+		Timeout   string `yaml:"timeout,omitempty"`
+	}
+	if err := yaml.Unmarshal([]byte(frontmatter), &raw); err != nil {
 		return nil, fmt.Errorf("cron: parse frontmatter: %w", err)
 	}
 
-	if job.Name == "" {
+	if raw.Name == "" {
 		return nil, fmt.Errorf("cron: name is required")
 	}
-	if job.Schedule == "" {
+	if raw.Schedule == "" {
 		return nil, fmt.Errorf("cron: cron schedule is required")
 	}
 
-	job.Prompt = body
+	job := CronJob{
+		Name:      raw.Name,
+		Schedule:  raw.Schedule,
+		Suspended: raw.Suspended,
+		Prompt:    body,
+	}
+	if raw.Timeout != "" {
+		d, err := time.ParseDuration(raw.Timeout)
+		if err != nil {
+			return nil, fmt.Errorf("cron: parse timeout %q: %w", raw.Timeout, err)
+		}
+		if d < 0 {
+			return nil, fmt.Errorf("cron: timeout must be non-negative, got %q", raw.Timeout)
+		}
+		job.Timeout = d
+	}
 	return &job, nil
 }
 
@@ -63,11 +85,16 @@ func Parse(data []byte) (*CronJob, error) {
 func Serialize(job *CronJob) ([]byte, error) {
 	var buf bytes.Buffer
 
+	timeout := ""
+	if job.Timeout > 0 {
+		timeout = job.Timeout.String()
+	}
 	fm, err := yaml.Marshal(struct {
 		Name      string `yaml:"name"`
 		Schedule  string `yaml:"cron"`
 		Suspended bool   `yaml:"suspended,omitempty"`
-	}{Name: job.Name, Schedule: job.Schedule, Suspended: job.Suspended})
+		Timeout   string `yaml:"timeout,omitempty"`
+	}{Name: job.Name, Schedule: job.Schedule, Suspended: job.Suspended, Timeout: timeout})
 	if err != nil {
 		return nil, fmt.Errorf("cron: marshal frontmatter: %w", err)
 	}

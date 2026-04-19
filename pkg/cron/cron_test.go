@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseValid(t *testing.T) {
@@ -151,6 +152,94 @@ func TestSerializeSuspended(t *testing.T) {
 		}
 		if strings.Contains(string(data), "suspended") {
 			t.Errorf("expected serialized output to omit 'suspended' when false, got:\n%s", data)
+		}
+	})
+}
+
+func TestParseTimeout(t *testing.T) {
+	t.Run("parses Go duration strings", func(t *testing.T) {
+		cases := map[string]time.Duration{
+			"30m":    30 * time.Minute,
+			"2h":     2 * time.Hour,
+			"1h30m":  90 * time.Minute,
+			"500ms":  500 * time.Millisecond,
+		}
+		for in, want := range cases {
+			t.Run(in, func(t *testing.T) {
+				data := []byte("---\nname: foo\ncron: \"0 9 * * *\"\ntimeout: " + in + "\n---\nprompt")
+				job, err := Parse(data)
+				if err != nil {
+					t.Fatalf("Parse failed: %v", err)
+				}
+				if job.Timeout != want {
+					t.Errorf("expected Timeout=%s, got %s", want, job.Timeout)
+				}
+			})
+		}
+	})
+
+	t.Run("absent defaults to zero", func(t *testing.T) {
+		data := []byte("---\nname: foo\ncron: \"0 9 * * *\"\n---\nprompt")
+		job, err := Parse(data)
+		if err != nil {
+			t.Fatalf("Parse failed: %v", err)
+		}
+		if job.Timeout != 0 {
+			t.Errorf("expected Timeout=0 when absent, got %s", job.Timeout)
+		}
+	})
+
+	t.Run("invalid duration errors", func(t *testing.T) {
+		data := []byte("---\nname: foo\ncron: \"0 9 * * *\"\ntimeout: not-a-duration\n---\nprompt")
+		if _, err := Parse(data); err == nil {
+			t.Fatal("expected error for invalid timeout")
+		}
+	})
+
+	t.Run("negative duration errors", func(t *testing.T) {
+		data := []byte("---\nname: foo\ncron: \"0 9 * * *\"\ntimeout: -5m\n---\nprompt")
+		if _, err := Parse(data); err == nil {
+			t.Fatal("expected error for negative timeout")
+		}
+	})
+}
+
+func TestSerializeTimeout(t *testing.T) {
+	t.Run("non-zero round-trips", func(t *testing.T) {
+		original := &CronJob{
+			Name:     "foo",
+			Schedule: "0 9 * * *",
+			Timeout:  30 * time.Minute,
+			Prompt:   "hello",
+		}
+		data, err := Serialize(original)
+		if err != nil {
+			t.Fatalf("Serialize failed: %v", err)
+		}
+		if !strings.Contains(string(data), "timeout: 30m0s") {
+			t.Errorf("expected serialized output to contain 'timeout: 30m0s', got:\n%s", data)
+		}
+		parsed, err := Parse(data)
+		if err != nil {
+			t.Fatalf("Parse round-trip failed: %v", err)
+		}
+		if parsed.Timeout != 30*time.Minute {
+			t.Errorf("expected Timeout=30m after round-trip, got %s", parsed.Timeout)
+		}
+	})
+
+	t.Run("zero omits the field", func(t *testing.T) {
+		original := &CronJob{
+			Name:     "foo",
+			Schedule: "0 9 * * *",
+			Prompt:   "hello",
+		}
+		data, err := Serialize(original)
+		if err != nil {
+			t.Fatalf("Serialize failed: %v", err)
+		}
+		if strings.Contains(string(data), "timeout") {
+			t.Errorf("expected serialized output to omit 'timeout' when zero, got:\n%s", data)
 		}
 	})
 }
