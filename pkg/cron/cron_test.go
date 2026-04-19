@@ -80,6 +80,81 @@ func TestSerializeRoundTrip(t *testing.T) {
 	}
 }
 
+func TestParseSuspended(t *testing.T) {
+	t.Run("explicit true", func(t *testing.T) {
+		data := []byte("---\nname: foo\ncron: \"0 9 * * *\"\nsuspended: true\n---\nprompt")
+		job, err := Parse(data)
+		if err != nil {
+			t.Fatalf("Parse failed: %v", err)
+		}
+		if !job.Suspended {
+			t.Errorf("expected Suspended=true, got false")
+		}
+	})
+
+	t.Run("explicit false", func(t *testing.T) {
+		data := []byte("---\nname: foo\ncron: \"0 9 * * *\"\nsuspended: false\n---\nprompt")
+		job, err := Parse(data)
+		if err != nil {
+			t.Fatalf("Parse failed: %v", err)
+		}
+		if job.Suspended {
+			t.Errorf("expected Suspended=false, got true")
+		}
+	})
+
+	t.Run("absent defaults to false", func(t *testing.T) {
+		data := []byte("---\nname: foo\ncron: \"0 9 * * *\"\n---\nprompt")
+		job, err := Parse(data)
+		if err != nil {
+			t.Fatalf("Parse failed: %v", err)
+		}
+		if job.Suspended {
+			t.Errorf("expected Suspended=false when absent, got true")
+		}
+	})
+}
+
+func TestSerializeSuspended(t *testing.T) {
+	t.Run("true round-trip", func(t *testing.T) {
+		original := &CronJob{
+			Name:      "foo",
+			Schedule:  "0 9 * * *",
+			Suspended: true,
+			Prompt:    "hello",
+		}
+		data, err := Serialize(original)
+		if err != nil {
+			t.Fatalf("Serialize failed: %v", err)
+		}
+		if !strings.Contains(string(data), "suspended: true") {
+			t.Errorf("expected serialized output to contain 'suspended: true', got:\n%s", data)
+		}
+		parsed, err := Parse(data)
+		if err != nil {
+			t.Fatalf("Parse round-trip failed: %v", err)
+		}
+		if !parsed.Suspended {
+			t.Errorf("expected Suspended=true after round-trip")
+		}
+	})
+
+	t.Run("false omits the field", func(t *testing.T) {
+		original := &CronJob{
+			Name:     "foo",
+			Schedule: "0 9 * * *",
+			Prompt:   "hello",
+		}
+		data, err := Serialize(original)
+		if err != nil {
+			t.Fatalf("Serialize failed: %v", err)
+		}
+		if strings.Contains(string(data), "suspended") {
+			t.Errorf("expected serialized output to omit 'suspended' when false, got:\n%s", data)
+		}
+	})
+}
+
 func TestFilename(t *testing.T) {
 	if got := Filename("daily-summary"); got != "daily-summary.md" {
 		t.Errorf("expected daily-summary.md, got %q", got)

@@ -17,6 +17,7 @@ func init() {
 	cmd := cronCmd()
 	cmd.AddCommand(cronLsCmd())
 	cmd.AddCommand(cronRmCmd())
+	cmd.AddCommand(cronReloadCmd())
 	rootCmd.AddCommand(cmd)
 }
 
@@ -67,6 +68,28 @@ func cronLsCmd() *cobra.Command {
 				fmt.Fprintf(w, "%s\t%s\t%s\n", j.Name, j.Schedule, prompt)
 			}
 			return w.Flush()
+		},
+	}
+}
+
+func cronReloadCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "reload",
+		Short: "Ask the daemon to reload cron jobs from disk",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !daemon.IsRunning() {
+				return fmt.Errorf("daemon is not running")
+			}
+			resp, err := daemon.SendCommand("cron-reload", nil)
+			if err != nil {
+				return fmt.Errorf("reload: %w", err)
+			}
+			if !resp.OK {
+				return fmt.Errorf("reload: %s", resp.Error)
+			}
+			fmt.Println("Cron jobs reloaded.")
+			return nil
 		},
 	}
 }

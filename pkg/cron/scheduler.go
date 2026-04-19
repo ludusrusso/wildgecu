@@ -43,14 +43,21 @@ func (s *Scheduler) LoadAndStart(ctx context.Context) error {
 		s.logger.Warn("cron load error", "error", err)
 	}
 
+	registered := 0
 	for _, job := range jobs {
+		if job.Suspended {
+			s.logger.Info("cron job suspended", "name", job.Name)
+			continue
+		}
 		if err := s.addJob(ctx, job); err != nil {
 			s.logger.Error("failed to add cron job", "name", job.Name, "error", err)
+			continue
 		}
+		registered++
 	}
 
 	s.scheduler.Start()
-	s.logger.Info("cron scheduler started", "jobs", len(jobs))
+	s.logger.Info("cron scheduler started", "jobs", registered)
 	return nil
 }
 
@@ -85,13 +92,20 @@ func (s *Scheduler) Reload(ctx context.Context) error {
 		s.logger.Warn("cron reload error", "error", err)
 	}
 
+	registered := 0
 	for _, job := range jobs {
+		if job.Suspended {
+			s.logger.Info("cron job suspended", "name", job.Name)
+			continue
+		}
 		if err := s.addJob(ctx, job); err != nil {
 			s.logger.Error("failed to add cron job on reload", "name", job.Name, "error", err)
+			continue
 		}
+		registered++
 	}
 
-	s.logger.Info("cron scheduler reloaded", "jobs", len(jobs))
+	s.logger.Info("cron scheduler reloaded", "jobs", registered)
 	return nil
 }
 

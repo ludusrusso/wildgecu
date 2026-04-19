@@ -12,9 +12,10 @@ import (
 
 // CronJob represents a scheduled LLM prompt.
 type CronJob struct {
-	Name     string `yaml:"name"`
-	Schedule string `yaml:"cron"`
-	Prompt   string `yaml:"-"`
+	Name      string `yaml:"name"`
+	Schedule  string `yaml:"cron"`
+	Suspended bool   `yaml:"suspended,omitempty"`
+	Prompt    string `yaml:"-"`
 }
 
 // Parse parses a cron job from a markdown file with YAML frontmatter.
@@ -63,9 +64,10 @@ func Serialize(job *CronJob) ([]byte, error) {
 	var buf bytes.Buffer
 
 	fm, err := yaml.Marshal(struct {
-		Name     string `yaml:"name"`
-		Schedule string `yaml:"cron"`
-	}{Name: job.Name, Schedule: job.Schedule})
+		Name      string `yaml:"name"`
+		Schedule  string `yaml:"cron"`
+		Suspended bool   `yaml:"suspended,omitempty"`
+	}{Name: job.Name, Schedule: job.Schedule, Suspended: job.Suspended})
 	if err != nil {
 		return nil, fmt.Errorf("cron: marshal frontmatter: %w", err)
 	}
