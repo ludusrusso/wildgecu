@@ -54,6 +54,14 @@ func TestFormatToolCallLabel(t *testing.T) {
 			t.Errorf("got %q, want %q", got, "list_files")
 		}
 	})
+
+	t.Run("ToolWithNewlines", func(t *testing.T) {
+		got := formatToolCallLabel("write_file", "path: foo.txt\ncontent: bar")
+		want := "write_file(path: foo.txt\\ncontent: bar)"
+		if got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
 }
 
 func TestRenderTodos(t *testing.T) {
@@ -80,8 +88,8 @@ func TestRenderTodos(t *testing.T) {
 				t.Errorf("rendered output missing %q\nfull output:\n%s", want, got)
 			}
 		}
-		if rows := m.todoRows(); rows != 4 {
-			t.Errorf("todoRows() = %d, want 4", rows)
+		if rows := m.todoRows(); rows != 7 {
+			t.Errorf("todoRows() = %d, want 7", rows)
 		}
 	})
 }

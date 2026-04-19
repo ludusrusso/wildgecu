@@ -8,7 +8,10 @@ var (
 	errorStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
 	helpStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
 	spinnerStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-	toolStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
+	toolStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true)
+	toolDimStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Italic(true)
+	todoStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("99")) // Purple
+	todoHeaderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("99")).Bold(true).Underline(true)
 	informStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("45"))
 
 	acNormalStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))

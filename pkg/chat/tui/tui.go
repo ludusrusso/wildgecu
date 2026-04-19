@@ -51,32 +51,32 @@ type programRef struct {
 
 // Model is the Bubble Tea model for the chat TUI.
 type Model struct {
-	ctx            context.Context
-	client         *daemon.Client
-	sessionID      string
-	welcomeText    string
-	program        *programRef
-	streamContent  string
-	activeToolCall string
-	display        []string
+	ctx                 context.Context
+	client              *daemon.Client
+	sessionID           string
+	welcomeText         string
+	program             *programRef
+	streamContent       string
+	activeToolCall      string
+	display             []string
 	toolCallsThisTurn   int
 	toolCallSlotIdxs    []int
 	toolCallOverflowIdx int
-	textinput      textinput.Model
-	viewport       viewport.Model
-	spinner        spinner.Model
-	autocomplete   *Autocomplete
-	streamIdx      int
-	width          int
-	height         int
-	thinkingIdx    int
-	quitting       bool
-	loading        bool
-	ready          bool
-	codeMode       bool
-	workDir        string
-	model          string
-	todos          []todo.Item
+	textinput           textinput.Model
+	viewport            viewport.Model
+	spinner             spinner.Model
+	autocomplete        *Autocomplete
+	streamIdx           int
+	width               int
+	height              int
+	thinkingIdx         int
+	quitting            bool
+	loading             bool
+	ready               bool
+	codeMode            bool
+	workDir             string
+	model               string
+	todos               []todo.Item
 }
 
 // New creates a new TUI Model connected to the daemon via a daemon.Client.
@@ -212,6 +212,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.streamIdx = len(m.display) - 1
 			m.streamContent = ""
 			m.toolCallsThisTurn = 0
+			m.resizeViewport()
 			m.toolCallSlotIdxs = nil
 			m.toolCallOverflowIdx = -1
 			m.loading = true
@@ -270,7 +271,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, mouseCmd
 
 	case informMsg:
-		m.appendDisplay(informStyle.Render(">> " + msg.message))
+		if m.loading && m.streamIdx != -1 {
+			m.insertDisplayBeforeStream(informStyle.Render(">> " + msg.message))
+		} else {
+			m.appendDisplay(informStyle.Render(">> " + msg.message))
+		}
 		return m, nil
 
 	case toolCallMsg:
@@ -284,18 +289,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.agent != "" {
 			label = "[" + msg.agent + "] " + label
 		}
-		rendered := toolStyle.Render("⚡ " + label)
+		rendered := toolStyle.Render("⚡ ") + toolDimStyle.Render(label)
+		m.resizeViewport()
 		m.toolCallsThisTurn++
 		if m.toolCallsThisTurn <= maxToolCallsPerTurn {
-			m.appendDisplay(rendered)
-			m.toolCallSlotIdxs = append(m.toolCallSlotIdxs, len(m.display)-1)
+			idx := m.insertDisplayBeforeStream(rendered)
+			m.toolCallSlotIdxs = append(m.toolCallSlotIdxs, idx)
 		} else {
 			summary := toolStyle.Render(fmt.Sprintf("+%d more tool calls", m.toolCallsThisTurn-maxToolCallsPerTurn))
 			if m.toolCallOverflowIdx == -1 {
 				m.toolCallOverflowIdx = m.toolCallSlotIdxs[0]
 				m.display[m.toolCallOverflowIdx] = summary
-				m.appendDisplay(rendered)
-				m.toolCallSlotIdxs = append(m.toolCallSlotIdxs[1:], len(m.display)-1)
+				idx := m.insertDisplayBeforeStream(rendered)
+				m.toolCallSlotIdxs = append(m.toolCallSlotIdxs[1:], idx)
 			} else {
 				for i := 0; i < len(m.toolCallSlotIdxs)-1; i++ {
 					m.display[m.toolCallSlotIdxs[i]] = m.display[m.toolCallSlotIdxs[i+1]]
@@ -305,7 +311,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if m.ready {
 				m.viewport.SetContent(strings.Join(m.display, "\n"))
-				m.viewport.GotoBottom()
+				if m.viewport.AtBottom() {
+					m.viewport.GotoBottom()
+				}
 			}
 		}
 		return m, nil
@@ -396,7 +404,11 @@ func (m *Model) resizeViewport() {
 }
 
 func (m *Model) todoRows() int {
-	return len(m.todos)
+	rendered := m.renderTodos()
+	if rendered == "" {
+		return 0
+	}
+	return lipgloss.Height(rendered) + 2 // 2 newlines + content
 }
 
 // renderTodos returns the sticky region's string representation, or empty
@@ -405,11 +417,28 @@ func (m *Model) renderTodos() string {
 	if len(m.todos) == 0 {
 		return ""
 	}
-	lines := make([]string, len(m.todos))
-	for i, it := range m.todos {
-		lines[i] = fmt.Sprintf("%s %s", todoCheckbox(it.Status), it.Content)
+
+	var b strings.Builder
+	b.WriteString(todoHeaderStyle.Render("📋 TODO LIST") + "\n")
+
+	for _, it := range m.todos {
+		checkbox := todoCheckbox(it.Status)
+		prefix := fmt.Sprintf(" %s ", checkbox)
+		prefixLen := lipgloss.Width(prefix)
+
+		contentWidth := m.width - prefixLen
+		if contentWidth < 20 {
+			contentWidth = 20
+		}
+
+		content := lipgloss.NewStyle().
+			Width(contentWidth).
+			Render(it.Content)
+
+		item := lipgloss.JoinHorizontal(lipgloss.Top, prefix, content)
+		b.WriteString(todoStyle.Render(item) + "\n")
 	}
-	return toolStyle.Render(strings.Join(lines, "\n"))
+	return strings.TrimRight(b.String(), "\n")
 }
 
 func todoCheckbox(s todo.Status) string {
@@ -425,6 +454,8 @@ func todoCheckbox(s todo.Status) string {
 	}
 }
 
+var argEscaper = strings.NewReplacer("\n", "\\n", "\r", "\\r")
+
 // formatToolCallLabel returns a compact inline label, using specialized
 // summaries for todo tool calls instead of raw-args dumps.
 func formatToolCallLabel(name, args string) string {
@@ -437,7 +468,7 @@ func formatToolCallLabel(name, args string) string {
 	if args == "" {
 		return name
 	}
-	return name + "(" + args + ")"
+	return name + "(" + argEscaper.Replace(args) + ")"
 }
 
 // summarizeTodoCreate parses "contents: [a b c]" from provider.FormatToolArgs
@@ -512,8 +543,33 @@ func (m *Model) appendDisplay(line string) {
 	m.display = append(m.display, line)
 	if m.ready {
 		m.viewport.SetContent(strings.Join(m.display, "\n"))
-		m.viewport.GotoBottom()
+		if m.viewport.AtBottom() {
+			m.viewport.GotoBottom()
+		}
 	}
+}
+
+func (m *Model) insertDisplayBeforeStream(line string) int {
+	idx := m.streamIdx
+	if idx < 0 || idx >= len(m.display) {
+		m.appendDisplay(line)
+		return len(m.display) - 1
+	}
+
+	// Efficient insert
+	m.display = append(m.display, "")
+	copy(m.display[idx+1:], m.display[idx:])
+	m.display[idx] = line
+
+	m.streamIdx++
+
+	if m.ready {
+		m.viewport.SetContent(strings.Join(m.display, "\n"))
+		if m.viewport.AtBottom() {
+			m.viewport.GotoBottom()
+		}
+	}
+	return idx
 }
 
 func (m Model) View() string {
@@ -533,8 +589,10 @@ func (m Model) View() string {
 	b.WriteString(m.viewport.View())
 	b.WriteString("\n")
 
-	// Sticky todo region (collapses to zero height when the list is empty).
+	// Sticky regions
+
 	if rendered := m.renderTodos(); rendered != "" {
+		b.WriteString("\n")
 		b.WriteString(rendered)
 		b.WriteString("\n")
 	}
