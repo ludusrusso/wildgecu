@@ -57,6 +57,9 @@ type Model struct {
 	streamContent  string
 	activeToolCall string
 	display        []string
+	toolCallsThisTurn   int
+	toolCallSlotIdxs    []int
+	toolCallOverflowIdx int
 	textinput      textinput.Model
 	viewport       viewport.Model
 	spinner        spinner.Model
@@ -86,12 +89,13 @@ func New(ctx context.Context, client *daemon.Client) Model {
 	sp.Style = spinnerStyle
 
 	return Model{
-		ctx:          ctx,
-		client:       client,
-		textinput:    ti,
-		spinner:      sp,
-		program:      &programRef{},
-		autocomplete: NewAutocomplete(nil),
+		ctx:                 ctx,
+		client:              client,
+		textinput:           ti,
+		spinner:             sp,
+		program:             &programRef{},
+		autocomplete:        NewAutocomplete(nil),
+		toolCallOverflowIdx: -1,
 	}
 }
 
@@ -204,6 +208,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.appendDisplay("") // placeholder for streaming content
 			m.streamIdx = len(m.display) - 1
 			m.streamContent = ""
+			m.toolCallsThisTurn = 0
+			m.toolCallSlotIdxs = nil
+			m.toolCallOverflowIdx = -1
 			m.loading = true
 			n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(thinkingVerbs))))
 			m.thinkingIdx = int(n.Int64())
@@ -273,7 +280,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.agent != "" {
 			label = "[" + msg.agent + "] " + label
 		}
-		m.appendDisplay(toolStyle.Render("⚡ " + label))
+		rendered := toolStyle.Render("⚡ " + label)
+		m.toolCallsThisTurn++
+		if m.toolCallsThisTurn <= maxToolCallsPerTurn {
+			m.appendDisplay(rendered)
+			m.toolCallSlotIdxs = append(m.toolCallSlotIdxs, len(m.display)-1)
+		} else {
+			summary := toolStyle.Render(fmt.Sprintf("+%d more tool calls", m.toolCallsThisTurn-maxToolCallsPerTurn))
+			if m.toolCallOverflowIdx == -1 {
+				m.toolCallOverflowIdx = m.toolCallSlotIdxs[0]
+				m.display[m.toolCallOverflowIdx] = summary
+				m.appendDisplay(rendered)
+				m.toolCallSlotIdxs = append(m.toolCallSlotIdxs[1:], len(m.display)-1)
+			} else {
+				for i := 0; i < len(m.toolCallSlotIdxs)-1; i++ {
+					m.display[m.toolCallSlotIdxs[i]] = m.display[m.toolCallSlotIdxs[i+1]]
+				}
+				m.display[m.toolCallSlotIdxs[len(m.toolCallSlotIdxs)-1]] = rendered
+				m.display[m.toolCallOverflowIdx] = summary
+			}
+			if m.ready {
+				m.viewport.SetContent(strings.Join(m.display, "\n"))
+				m.viewport.GotoBottom()
+			}
+		}
 		return m, nil
 
 	case streamChunkMsg:
@@ -332,6 +362,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 const maxAutocompleteRows = 8
+const maxToolCallsPerTurn = 4
 
 func (m *Model) acRows() int {
 	if !m.autocomplete.Visible() {
