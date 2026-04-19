@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/ludusrusso/wildgecu/pkg/home"
 	"github.com/ludusrusso/wildgecu/pkg/provider"
@@ -23,6 +25,12 @@ type WriteMemoryOutput struct {
 
 // RunMemoryAgent reviews the conversation and updates MEMORY.md.
 func RunMemoryAgent(ctx context.Context, p provider.Provider, h *home.Home, messages []provider.Message, currentMemory string) error {
+	start := time.Now()
+	slog.Info("memory agent: start", "messages", len(messages), "memory_bytes", len(currentMemory))
+	defer func() {
+		slog.Info("memory agent: done", "elapsed", time.Since(start))
+	}()
+
 	writeMemoryTool := tool.NewTool("write_memory",
 		"Write the updated MEMORY.md content.",
 		func(ctx context.Context, in WriteMemoryInput) (WriteMemoryOutput, error) {
@@ -32,6 +40,7 @@ func RunMemoryAgent(ctx context.Context, p provider.Provider, h *home.Home, mess
 			if err := h.Memory().Write(in.Content); err != nil {
 				return WriteMemoryOutput{}, fmt.Errorf("writing MEMORY.md: %w", err)
 			}
+			slog.Info("memory agent: write_memory invoked", "bytes", len(in.Content))
 			return WriteMemoryOutput{Status: "ok"}, provider.ErrDone
 		},
 	)
