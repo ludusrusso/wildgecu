@@ -134,6 +134,43 @@ func TestCronSuspendHandler(t *testing.T) {
 	})
 }
 
+type stubListSource struct {
+	jobs []cron.JobInfo
+}
+
+func (s *stubListSource) ListJobs() []cron.JobInfo {
+	return s.jobs
+}
+
+func TestCronListHandler(t *testing.T) {
+	t.Run("returns scheduler state verbatim", func(t *testing.T) {
+		source := &stubListSource{jobs: []cron.JobInfo{
+			{Name: "a", Schedule: "0 9 * * *", Status: cron.StatusRunning, NextRun: "2026-04-20T09:00:00Z"},
+			{Name: "b", Schedule: "0 9 * * *", Status: cron.StatusSuspended},
+			{Name: "c", Status: cron.StatusError, Error: "missing schedule"},
+		}}
+
+		h := cronListHandler(source)
+		resp, err := h(&Request{})
+		if err != nil {
+			t.Fatalf("handler error: %v", err)
+		}
+		if !resp.OK {
+			t.Fatalf("expected OK, got error: %s", resp.Error)
+		}
+		got, ok := resp.Payload.([]cron.JobInfo)
+		if !ok {
+			t.Fatalf("payload type = %T, want []cron.JobInfo", resp.Payload)
+		}
+		if len(got) != 3 {
+			t.Fatalf("got %d jobs, want 3", len(got))
+		}
+		if got[0].Status != cron.StatusRunning || got[1].Status != cron.StatusSuspended || got[2].Status != cron.StatusError {
+			t.Errorf("statuses not preserved: %+v", got)
+		}
+	})
+}
+
 func TestCronResumeHandler(t *testing.T) {
 	t.Run("resumes a suspended job and triggers reload", func(t *testing.T) {
 		dir := t.TempDir()

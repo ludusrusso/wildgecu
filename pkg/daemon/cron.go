@@ -16,6 +16,19 @@ type cronSchedulerReloader interface {
 	Reload(ctx context.Context) error
 }
 
+// cronListSource is the subset of the scheduler the cron-list handler needs.
+type cronListSource interface {
+	ListJobs() []cron.JobInfo
+}
+
+// cronListHandler returns an RPC handler that surfaces the scheduler's full
+// job state (running, suspended, error) to the CLI.
+func cronListHandler(source cronListSource) CommandHandler {
+	return func(r *Request) (*Response, error) {
+		return &Response{OK: true, Payload: source.ListJobs()}, nil
+	}
+}
+
 // cronSuspendHandler returns an RPC handler that rewrites the `suspended` field
 // of a cron markdown file to true and triggers a scheduler reload.
 func cronSuspendHandler(ctx context.Context, cronsDir string, scheduler cronSchedulerReloader) CommandHandler {

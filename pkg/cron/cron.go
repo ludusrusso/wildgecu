@@ -91,28 +91,54 @@ func Filename(name string) string {
 // LoadAll loads all cron jobs from a directory path.
 // It returns all successfully parsed jobs and any errors encountered.
 func LoadAll(dir string) ([]*CronJob, []error) {
-	matches, err := filepath.Glob(filepath.Join(dir, "*.md"))
-	if err != nil {
-		return nil, []error{fmt.Errorf("cron: search: %w", err)}
-	}
-
+	results := LoadAllResults(dir)
 	var jobs []*CronJob
 	var errs []error
+	for _, r := range results {
+		if r.Err != nil {
+			errs = append(errs, r.Err)
+			continue
+		}
+		jobs = append(jobs, r.Job)
+	}
+	return jobs, errs
+}
 
+// LoadResult is a per-file outcome from loading a cron directory. Successfully
+// parsed files populate Job; unparseable files populate Err. Name is derived
+// from the frontmatter when parseable, else from the filename stem.
+type LoadResult struct {
+	Name string
+	Path string
+	Job  *CronJob
+	Err  error
+}
+
+// LoadAllResults walks a cron directory and returns one LoadResult per .md
+// file, including unparseable ones. Unlike LoadAll it retains the filename
+// so callers can surface broken jobs by name.
+func LoadAllResults(dir string) []LoadResult {
+	matches, err := filepath.Glob(filepath.Join(dir, "*.md"))
+	if err != nil {
+		return []LoadResult{{Err: fmt.Errorf("cron: search: %w", err)}}
+	}
+
+	results := make([]LoadResult, 0, len(matches))
 	for _, path := range matches {
 		f := filepath.Base(path)
+		stem := strings.TrimSuffix(f, filepath.Ext(f))
 		data, err := os.ReadFile(path)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("cron: read %s: %w", f, err))
+			results = append(results, LoadResult{Name: stem, Path: path, Err: fmt.Errorf("cron: read %s: %w", f, err)})
 			continue
 		}
 		job, err := Parse(data)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("cron: %s: %w", f, err))
+			results = append(results, LoadResult{Name: stem, Path: path, Err: fmt.Errorf("cron: %s: %w", f, err)})
 			continue
 		}
-		jobs = append(jobs, job)
+		results = append(results, LoadResult{Name: job.Name, Path: path, Job: job})
 	}
 
-	return jobs, errs
+	return results
 }
