@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.3.0](https://github.com/ludusrusso/wildgecu/compare/v1.2.0...v1.3.0) (2026-04-21)
+
+
+### Features
+
+* **cron:** cron test with streaming RPC and manual-run source tag ([#68](https://github.com/ludusrusso/wildgecu/issues/68)) ([e801c4d](https://github.com/ludusrusso/wildgecu/commit/e801c4d89153b45b432fe6e7c7354a8c7992bc8c))
+* **cron:** daemon-backed cron ls with STATUS column and error tracking ([#66](https://github.com/ludusrusso/wildgecu/issues/66)) ([60c4255](https://github.com/ludusrusso/wildgecu/commit/60c4255cd97f5289628aba90ce60d4cdc11fd85a))
+* **cron:** suspend/resume CLI + format-preserving frontmatter writer ([#65](https://github.com/ludusrusso/wildgecu/issues/65)) ([cac274e](https://github.com/ludusrusso/wildgecu/commit/cac274e088ce9a25ed576ba63ff23010092c2837))
+* **cron:** suspended frontmatter field and cron reload CLI ([#64](https://github.com/ludusrusso/wildgecu/issues/64)) ([502de06](https://github.com/ludusrusso/wildgecu/commit/502de0681225f2ce0b7a078c48d4ac937704dac3))
+* **cron:** timeout frontmatter field + TIMEOUT column + scheduled-run enforcement ([#67](https://github.com/ludusrusso/wildgecu/issues/67)) ([47c34e8](https://github.com/ludusrusso/wildgecu/commit/47c34e8f246d33b33284188f0b46ac55ce8c726f))
+* **memory:** configurable model and compressed transcript for memory agent ([c1c1a5d](https://github.com/ludusrusso/wildgecu/commit/c1c1a5d6129074c8f7474fd6a363c403a0371ead))
+* **memory:** log memory agent runs and forbid in-session memory edits ([5c56a6a](https://github.com/ludusrusso/wildgecu/commit/5c56a6ad13c8318382cdae477ca5d1d09b161458))
+* **todos:** session-scoped todo domain, tools, and /todos command ([#71](https://github.com/ludusrusso/wildgecu/issues/71)) ([4d83bc2](https://github.com/ludusrusso/wildgecu/commit/4d83bc292cc8e23e27604c41893c0d0aa44cba38))
+* **todos:** sticky TUI region + inline tool-call labels ([#72](https://github.com/ludusrusso/wildgecu/issues/72)) ([544bc57](https://github.com/ludusrusso/wildgecu/commit/544bc57e7c2c162cc0a8fbc114220feb08534f09))
+* **tui:** cap tool-call lines at 4 per turn with overflow summary ([121c29c](https://github.com/ludusrusso/wildgecu/commit/121c29c7776406c30da8b50a44712902127c70c3))
+* **tui:** styled todo region, insert tool calls above stream, preserve scroll ([4a50700](https://github.com/ludusrusso/wildgecu/commit/4a5070059d5dbbf15cb7b48f67dbcd13f5be3f2e))
+
 ## [1.2.0](https://github.com/ludusrusso/wildgecu/compare/v1.1.0...v1.2.0) (2026-04-12)
 
 
