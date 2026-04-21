@@ -21,12 +21,58 @@ func FileTools(workDir string) []tool.Tool {
 	}
 }
 
-// resolvePath resolves inputPath relative to workDir.
-func resolvePath(workDir, inputPath string) string {
+// resolvePath resolves inputPath relative to workDir and enforces that the
+// resulting location stays inside workDir. It evaluates symlinks both on
+// workDir and on the target (or on its nearest existing ancestor, so that
+// writes to new files under valid parent directories keep working). If the
+// canonical target escapes workDir, an error is returned.
+func resolvePath(workDir, inputPath string) (string, error) {
+	var target string
 	if filepath.IsAbs(inputPath) {
-		return filepath.Clean(inputPath)
+		target = filepath.Clean(inputPath)
+	} else {
+		target = filepath.Clean(filepath.Join(workDir, inputPath))
 	}
-	return filepath.Join(workDir, inputPath)
+
+	canonWork, err := filepath.EvalSymlinks(workDir)
+	if err != nil {
+		return "", fmt.Errorf("resolving workDir %q: %w", workDir, err)
+	}
+
+	canonTarget, err := canonicalPath(target)
+	if err != nil {
+		return "", fmt.Errorf("resolving path %q: %w", inputPath, err)
+	}
+
+	rel, err := filepath.Rel(canonWork, canonTarget)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path %q escapes working directory", inputPath)
+	}
+
+	return target, nil
+}
+
+// canonicalPath returns the symlink-resolved form of path. If path itself does
+// not exist, it walks up to the nearest existing ancestor, resolves its
+// symlinks, and re-appends the non-existent tail. This lets callers validate
+// write destinations before the file is created.
+func canonicalPath(path string) (string, error) {
+	current := filepath.Clean(path)
+	var rest string
+	for {
+		if resolved, err := filepath.EvalSymlinks(current); err == nil {
+			if rest == "" {
+				return resolved, nil
+			}
+			return filepath.Join(resolved, rest), nil
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", fmt.Errorf("no existing ancestor for %q", path)
+		}
+		rest = filepath.Join(filepath.Base(current), rest)
+		current = parent
+	}
 }
 
 // --- list_files ---
@@ -52,7 +98,11 @@ func newListFilesTool(workDir string) tool.Tool {
 		func(ctx context.Context, in listFilesInput) (listFilesOutput, error) {
 			dir := workDir
 			if in.Path != "" {
-				dir = resolvePath(workDir, in.Path)
+				resolved, err := resolvePath(workDir, in.Path)
+				if err != nil {
+					return listFilesOutput{}, err
+				}
+				dir = resolved
 			}
 
 			entries, err := os.ReadDir(dir)
@@ -104,7 +154,10 @@ type readFileOutput struct {
 func newReadFileTool(workDir string) tool.Tool {
 	return tool.NewTool("read_file", "Read a file's content with line numbers. Use this instead of bash cat/head/tail.",
 		func(ctx context.Context, in readFileInput) (readFileOutput, error) {
-			p := resolvePath(workDir, in.Path)
+			p, err := resolvePath(workDir, in.Path)
+			if err != nil {
+				return readFileOutput{}, err
+			}
 
 			data, err := os.ReadFile(p)
 			if err != nil {
@@ -168,7 +221,10 @@ type writeFileOutput struct {
 func newWriteFileTool(workDir string) tool.Tool {
 	return tool.NewTool("write_file", "Write content to a file. Always read_file first to understand context.",
 		func(ctx context.Context, in writeFileInput) (writeFileOutput, error) {
-			p := resolvePath(workDir, in.Path)
+			p, err := resolvePath(workDir, in.Path)
+			if err != nil {
+				return writeFileOutput{}, err
+			}
 
 			if in.Create {
 				dir := filepath.Dir(p)
@@ -202,7 +258,10 @@ type updateFileOutput struct {
 func newUpdateFileTool(workDir string) tool.Tool {
 	return tool.NewTool("update_file", "Replace an exact string in a file. The old_string must appear exactly once. Always read_file first.",
 		func(ctx context.Context, in updateFileInput) (updateFileOutput, error) {
-			p := resolvePath(workDir, in.Path)
+			p, err := resolvePath(workDir, in.Path)
+			if err != nil {
+				return updateFileOutput{}, err
+			}
 
 			data, err := os.ReadFile(p)
 			if err != nil {

@@ -264,18 +264,73 @@ func TestUpdateFile(t *testing.T) {
 }
 
 func TestResolvePath(t *testing.T) {
-	t.Run("relative", func(t *testing.T) {
-		got := resolvePath("/work", "sub/file.txt")
-		want := "/work/sub/file.txt"
+	t.Run("relative path stays inside workDir", func(t *testing.T) {
+		dir := t.TempDir()
+
+		got, err := resolvePath(dir, "sub/file.txt")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		want := filepath.Join(dir, "sub", "file.txt")
 		if got != want {
 			t.Fatalf("resolvePath = %q, want %q", got, want)
 		}
 	})
 
-	t.Run("absolute", func(t *testing.T) {
-		got := resolvePath("/work", "/tmp/file.txt")
-		if got != "/tmp/file.txt" {
-			t.Fatalf("resolvePath = %q, want /tmp/file.txt", got)
+	t.Run("absolute path inside workDir is allowed", func(t *testing.T) {
+		dir := t.TempDir()
+		target := filepath.Join(dir, "a.txt")
+
+		got, err := resolvePath(dir, target)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != target {
+			t.Fatalf("resolvePath = %q, want %q", got, target)
+		}
+	})
+
+	t.Run("absolute path outside workDir is rejected", func(t *testing.T) {
+		dir := t.TempDir()
+
+		if _, err := resolvePath(dir, "/etc/passwd"); err == nil {
+			t.Fatal("expected error for absolute path outside workDir")
+		}
+	})
+
+	t.Run("relative path escaping via dotdot is rejected", func(t *testing.T) {
+		dir := t.TempDir()
+
+		if _, err := resolvePath(dir, "../../../etc/passwd"); err == nil {
+			t.Fatal("expected error for relative path escaping via ..")
+		}
+	})
+
+	t.Run("symlink escaping workDir is rejected", func(t *testing.T) {
+		work := t.TempDir()
+		outside := t.TempDir()
+		if err := os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("secret"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(outside, filepath.Join(work, "link")); err != nil {
+			t.Skipf("cannot create symlink on this platform: %v", err)
+		}
+
+		if _, err := resolvePath(work, "link/secret.txt"); err == nil {
+			t.Fatal("expected error for path escaping via symlink")
+		}
+	})
+
+	t.Run("write path under missing parent inside workDir is allowed", func(t *testing.T) {
+		dir := t.TempDir()
+
+		got, err := resolvePath(dir, "newsub/new.txt")
+		if err != nil {
+			t.Fatalf("unexpected error for valid nested write path: %v", err)
+		}
+		want := filepath.Join(dir, "newsub", "new.txt")
+		if got != want {
+			t.Fatalf("resolvePath = %q, want %q", got, want)
 		}
 	})
 }
