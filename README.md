@@ -284,6 +284,25 @@ Build with a version tag:
 go build -ldflags "-X wildgecu/cmd.Version=1.0.0" -o wildgecu .
 ```
 
+## Development
+
+To run `make lint` and `make test` you need the toolchain versions pinned in `.mise.toml` (Go and `golangci-lint`). The repository uses [mise](https://mise.jdx.dev) to manage them.
+
+1. Install `mise` following the [official instructions](https://mise.jdx.dev/getting-started.html).
+2. From the repository root, authorize the config file:
+
+   ```bash
+   mise trust
+   ```
+
+3. Install the pinned tools:
+
+   ```bash
+   mise install
+   ```
+
+After that, `make lint` and `make test` work out of the box.
+
 ## Cron jobs
 
 The daemon executes scheduled LLM prompts. Cron jobs are defined as markdown files with YAML frontmatter in `~/.wildgecu/crons/`. Results are written to `~/.wildgecu/cron-results/`.
