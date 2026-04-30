@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.4.0](https://github.com/ludusrusso/wildgecu/compare/v1.3.0...v1.4.0) (2026-04-30)
+
+
+### Features
+
+* **tools:** apply bounded-exec to node tool ([#81](https://github.com/ludusrusso/wildgecu/issues/81)) ([960de63](https://github.com/ludusrusso/wildgecu/commit/960de63e27d8be72ef1761584e1a38d7b6db6ac3))
+* **tools:** bounded-exec helper + bash timeout & output truncation ([#79](https://github.com/ludusrusso/wildgecu/issues/79)) ([b97253b](https://github.com/ludusrusso/wildgecu/commit/b97253bc3379a97abd00a2603e95f4dcb0178840))
+* **tools:** glob tool + pkg/search.Paths ([#80](https://github.com/ludusrusso/wildgecu/issues/80)) ([ddb66c7](https://github.com/ludusrusso/wildgecu/commit/ddb66c784494e102baf9a7665d177e82eea2d051))
+* **tools:** grep tool + pkg/search foundation ([#77](https://github.com/ludusrusso/wildgecu/issues/77)) ([48a479f](https://github.com/ludusrusso/wildgecu/commit/48a479fb3f7fdd7c2fd39ced3b405ca290f8f1d7))
+* **tools:** multi_edit tool (atomic batched string-replace) ([#78](https://github.com/ludusrusso/wildgecu/issues/78)) ([1250b2d](https://github.com/ludusrusso/wildgecu/commit/1250b2d87583ea4c487096ccbdcc8b19a8bf051b))
+
+
+### Bug Fixes
+
+* data race on ManagedSession.Messages between turn and external readers ([#88](https://github.com/ludusrusso/wildgecu/issues/88)) ([021220f](https://github.com/ludusrusso/wildgecu/commit/021220f587d1e4baeb93682cda86ece767e3453a))
+* **tui:** clear todo list upon /clean ([cebf3c0](https://github.com/ludusrusso/wildgecu/commit/cebf3c0c1fe38515129d13faf0dbbb620ae22976))
+
+
+### Performance Improvements
+
+* **provider:** use strings.Builder in streaming loop ([96468cd](https://github.com/ludusrusso/wildgecu/commit/96468cde3d3422a935d70257dde9be32a42ea3e4))
+* **search:** pre-allocate maps and slices in output builders ([bf3c613](https://github.com/ludusrusso/wildgecu/commit/bf3c61392f06955ed8ecb6db37368de23dc764e0))
+
 ## [1.3.0](https://github.com/ludusrusso/wildgecu/compare/v1.2.0...v1.3.0) (2026-04-21)
 
 
