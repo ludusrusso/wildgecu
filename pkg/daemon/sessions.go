@@ -57,6 +57,15 @@ func (s *ManagedSession) Todos() *todo.List {
 	return s.todos
 }
 
+// cancelInflight cancels the current turn if one is running.
+func (s *ManagedSession) cancelInflight() {
+	s.cancelMu.Lock()
+	defer s.cancelMu.Unlock()
+	if s.cancel != nil {
+		s.cancel()
+	}
+}
+
 // NewSessionManager calls agent.Prepare to build the shared session.Config.
 func NewSessionManager(ctx context.Context, agentCfg agent.Config, ctr *container.Container) (*SessionManager, error) {
 	chatCfg, dbg, err := agent.Prepare(ctx, agentCfg)
@@ -175,23 +184,28 @@ func (sm *SessionManager) Get(id string) *ManagedSession {
 	return sm.sessions[id]
 }
 
-// Close finalizes the session (updates memory) and removes it.
+// Close cancels any in-flight turn, finalizes the session's memory on a
+// stable view of the message history, and removes it from the manager map.
 func (sm *SessionManager) Close(ctx context.Context, id string) {
-	sm.mu.Lock()
+	sm.mu.RLock()
 	sess, ok := sm.sessions[id]
-	if ok {
-		delete(sm.sessions, id)
-	}
-	sm.mu.Unlock()
-
-	if !ok || len(sess.messages) == 0 {
+	sm.mu.RUnlock()
+	if !ok {
 		return
 	}
 
-	// Best-effort finalize (update memory).
-	_ = agent.Finalize(ctx, sm.agentCfg, sess.messages)
-}
+	// Cancel first so a running turn releases sess.mu.
+	sess.cancelInflight()
 
+	// Hold sess.mu across Finalize so the message slice can't change mid-call.
+	sess.mu.Lock()
+	_ = agent.Finalize(ctx, sm.agentCfg, sess.messages)
+	sess.mu.Unlock()
+
+	sm.mu.Lock()
+	delete(sm.sessions, id)
+	sm.mu.Unlock()
+}
 
 // Reset closes the given session (with finalize) and creates a fresh one.
 func (sm *SessionManager) Reset(ctx context.Context, id string) (*ManagedSession, error) {
@@ -218,11 +232,7 @@ func (sm *SessionManager) Interrupt(id string) {
 	if sess == nil {
 		return
 	}
-	sess.cancelMu.Lock()
-	defer sess.cancelMu.Unlock()
-	if sess.cancel != nil {
-		sess.cancel()
-	}
+	sess.cancelInflight()
 }
 
 // WelcomeText returns the configured welcome text.
