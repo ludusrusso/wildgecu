@@ -337,6 +337,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.activeToolCall = ""
 		if msg.sessionID != "" {
+			if msg.sessionID != m.sessionID {
+				m.todos = nil
+				m.resizeViewport()
+			}
 			m.sessionID = msg.sessionID
 		}
 		if msg.content != "" {
