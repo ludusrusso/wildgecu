@@ -188,13 +188,7 @@ func FormatToolArgs(args map[string]any, maxLen int) string {
 	for k, v := range args {
 		parts = append(parts, fmt.Sprintf("%s: %v", k, v))
 	}
-	result := ""
-	for i, p := range parts {
-		if i > 0 {
-			result += ", "
-		}
-		result += p
-	}
+	result := strings.Join(parts, ", ")
 	if len(result) > maxLen {
 		result = result[:maxLen] + "..."
 	}
