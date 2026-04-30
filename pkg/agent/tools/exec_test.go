@@ -254,4 +254,76 @@ func TestNode(t *testing.T) {
 			t.Fatalf("stdout = %q", out.Stdout)
 		}
 	})
+
+	t.Run("default timeout still applies when timeout_seconds omitted", func(t *testing.T) {
+		var out nodeOutput
+		result, err := tl.Execute(context.Background(), map[string]any{
+			"script": `console.log("ok")`,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		json.Unmarshal([]byte(result), &out)
+		if out.Stdout != "ok\n" {
+			t.Fatalf("stdout = %q", out.Stdout)
+		}
+	})
+
+	t.Run("timeout_seconds arg fires", func(t *testing.T) {
+		var out nodeOutput
+		start := time.Now()
+		result, err := tl.Execute(context.Background(), map[string]any{
+			"script":          `setTimeout(() => {}, 5000)`,
+			"timeout_seconds": float64(1),
+		})
+		elapsed := time.Since(start)
+		if err != nil {
+			t.Fatal(err)
+		}
+		json.Unmarshal([]byte(result), &out)
+		if !out.TimedOut {
+			t.Fatalf("expected timed_out=true, got %+v", out)
+		}
+		if out.ExitCode != -1 {
+			t.Fatalf("exit_code = %d, want -1", out.ExitCode)
+		}
+		if elapsed > 4*time.Second {
+			t.Fatalf("expected fast return, elapsed = %s", elapsed)
+		}
+	})
+
+	t.Run("timeout_seconds above hard cap returns boundary error", func(t *testing.T) {
+		capped := newNodeTool(dir, ExecConfig{MaxTimeoutSeconds: 5})
+		_, err := capped.Execute(context.Background(), map[string]any{
+			"script":          `console.log("hi")`,
+			"timeout_seconds": float64(9999),
+		})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if !strings.Contains(err.Error(), "exceeds maximum") {
+			t.Fatalf("error = %q, want it to mention 'exceeds maximum'", err.Error())
+		}
+	})
+
+	t.Run("large stdout is truncated with marker and total bytes", func(t *testing.T) {
+		small := newNodeTool(dir, ExecConfig{HeadBytes: 100, TailBytes: 100})
+		var out nodeOutput
+		result, err := small.Execute(context.Background(), map[string]any{
+			"script": `for (let i = 1; i <= 200; i++) console.log("line" + String(i).padStart(3, "0") + "-AAAAAAAAAAAA");`,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		json.Unmarshal([]byte(result), &out)
+		if !strings.Contains(out.Stdout, "[... truncated ") {
+			t.Fatalf("expected truncation marker in stdout: %q", out.Stdout)
+		}
+		if out.StdoutTotalBytes <= 200 {
+			t.Fatalf("StdoutTotalBytes = %d, want > 200", out.StdoutTotalBytes)
+		}
+		if !strings.Contains(out.Stdout, "line200-") {
+			t.Fatalf("tail lost last line: %q", out.Stdout)
+		}
+	})
 }

@@ -1,10 +1,7 @@
 package tools
 
 import (
-	"bytes"
 	"context"
-	"errors"
-	"os/exec"
 	"time"
 
 	"github.com/ludusrusso/wildgecu/pkg/exec/bounded"
@@ -84,51 +81,36 @@ func newBashTool(workDir string, cfg ExecConfig) tool.Tool {
 }
 
 // --- node ---
-//
-// Note: node still uses the legacy exec path. Slice 5 (#81) converts it to
-// bounded.Run for parity with bash. Until then the cfg is ignored here so the
-// existing behavior — 30s hardcoded timeout, no output truncation — is
-// preserved.
 
 type nodeInput struct {
-	Script string `json:"script" description:"The Node.js script to execute"`
+	Script         string `json:"script" description:"The Node.js script to execute"`
+	TimeoutSeconds int    `json:"timeout_seconds,omitempty" description:"Per-call timeout in seconds. Default 30, hard-capped at 600."`
 }
 
 type nodeOutput struct {
-	Stdout   string `json:"stdout"`
-	Stderr   string `json:"stderr"`
-	ExitCode int    `json:"exit_code"`
+	Stdout           string `json:"stdout"`
+	Stderr           string `json:"stderr"`
+	ExitCode         int    `json:"exit_code"`
+	TimedOut         bool   `json:"timed_out,omitempty"`
+	StdoutTotalBytes int    `json:"stdout_total_bytes"`
+	StderrTotalBytes int    `json:"stderr_total_bytes"`
 }
 
-func newNodeTool(workDir string, _ ExecConfig) tool.Tool {
-	return tool.NewTool("node", "Execute a Node.js script and return its output",
+func newNodeTool(workDir string, cfg ExecConfig) tool.Tool {
+	return tool.NewTool("node",
+		"Execute a Node.js script and return its output. Pass timeout_seconds (default 30, hard-capped at 600) to give long-running scripts more time.",
 		func(ctx context.Context, in nodeInput) (nodeOutput, error) {
-			ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-			defer cancel()
-
-			cmd := exec.CommandContext(ctx, "node", "-e", in.Script)
-			cmd.Dir = workDir
-
-			var stdout, stderr bytes.Buffer
-			cmd.Stdout = &stdout
-			cmd.Stderr = &stderr
-
-			err := cmd.Run()
-
-			exitCode := 0
+			res, err := bounded.Run(ctx, "node", []string{"-e", in.Script}, cfg.boundedOpts(workDir, in.TimeoutSeconds))
 			if err != nil {
-				var exitErr *exec.ExitError
-				if errors.As(err, &exitErr) {
-					exitCode = exitErr.ExitCode()
-				} else {
-					return nodeOutput{}, err
-				}
+				return nodeOutput{}, err
 			}
-
 			return nodeOutput{
-				Stdout:   stdout.String(),
-				Stderr:   stderr.String(),
-				ExitCode: exitCode,
+				Stdout:           res.Stdout,
+				Stderr:           res.Stderr,
+				ExitCode:         res.ExitCode,
+				TimedOut:         res.TimedOut,
+				StdoutTotalBytes: res.StdoutTotalBytes,
+				StderrTotalBytes: res.StderrTotalBytes,
 			}, nil
 		},
 	)

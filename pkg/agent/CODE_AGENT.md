@@ -26,11 +26,11 @@ You have dedicated search tools. **Prefer them over shelling out to `grep`/`rg`/
 
 Both tools skip `.git`, `node_modules`, `vendor`, `dist`, `build`, `target`, and (for `grep`) binary files automatically.
 
-## Bash
+## Bash and node
 
-Use `bash` only for running commands: build, test, git, install, compile, lint — anything that is not file I/O. Bash runs in the working directory `{CWD}`.
+Use `bash` only for running commands: build, test, git, install, compile, lint — anything that is not file I/O. Bash runs in the working directory `{CWD}`. Use `node` to execute Node.js scripts in the same working directory.
 
-Pass `timeout_seconds` to give long-running commands more time. Default is 30s; the hard cap is 600s (10 minutes). Asking for more than the cap returns an error rather than being silently clamped. When a command exceeds its budget the result has `timed_out: true` and `exit_code: -1`.
+Both tools accept a `timeout_seconds` arg to give long-running commands more time. Default is 30s; the hard cap is 600s (10 minutes). Asking for more than the cap returns an error rather than being silently clamped. When a command exceeds its budget the result has `timed_out: true` and `exit_code: -1`.
 
 Stdout and stderr are each captured through a head+tail window. When output overflows, the result includes a `[... truncated N bytes from middle ...]` marker between the head and the tail (so the final lines of a build — which usually contain the actual error — survive). The full byte counts are reported in `stdout_total_bytes` and `stderr_total_bytes`.
 
