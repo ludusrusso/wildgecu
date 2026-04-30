@@ -136,8 +136,8 @@ func buildContentOutput(res search.Result) grepOutput {
 }
 
 func buildFilesOutput(res search.Result, head int) grepOutput {
-	seen := map[string]struct{}{}
-	files := make([]string, 0)
+	seen := make(map[string]struct{}, len(res.Matches))
+	files := make([]string, 0, len(res.Matches))
 	for _, m := range res.Matches {
 		if _, ok := seen[m.Path]; ok {
 			continue
@@ -209,7 +209,7 @@ func newGlobTool(workDir string) tool.Tool {
 }
 
 func buildCountOutput(res search.Result, head int) grepOutput {
-	counts := map[string]int{}
+	counts := make(map[string]int, len(res.Matches))
 	for _, m := range res.Matches {
 		counts[m.Path]++
 	}
