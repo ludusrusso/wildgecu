@@ -26,9 +26,18 @@ type GrepConfig struct {
 	MaxFileSizeBytes int64 `yaml:"max_file_size_bytes"`
 }
 
+// BashConfig configures the bash tool. Zero values fall through to the
+// defaults baked into pkg/exec/bounded.
+type BashConfig struct {
+	MaxTimeoutSeconds int `yaml:"max_timeout_seconds"`
+	HeadBytes         int `yaml:"head_bytes"`
+	TailBytes         int `yaml:"tail_bytes"`
+}
+
 // ToolsConfig groups per-tool configuration loaded from the YAML "tools" block.
 type ToolsConfig struct {
 	Grep GrepConfig `yaml:"grep"`
+	Bash BashConfig `yaml:"bash"`
 }
 
 // Config is the top-level application configuration.

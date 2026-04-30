@@ -22,6 +22,11 @@ func buildToolsConfig(in config.ToolsConfig) tools.Config {
 			MaxResults:       in.Grep.MaxResults,
 			MaxFileSizeBytes: in.Grep.MaxFileSizeBytes,
 		},
+		Exec: tools.ExecConfig{
+			MaxTimeoutSeconds: in.Bash.MaxTimeoutSeconds,
+			HeadBytes:         in.Bash.HeadBytes,
+			TailBytes:         in.Bash.TailBytes,
+		},
 	}
 }
 

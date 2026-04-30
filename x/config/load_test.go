@@ -668,6 +668,10 @@ tools:
   grep:
     max_results: 50
     max_file_size_bytes: 524288
+  bash:
+    max_timeout_seconds: 300
+    head_bytes: 16384
+    tail_bytes: 4096
 `)
 		if err := os.WriteFile(cfgPath, data, 0o644); err != nil {
 			t.Fatal(err)
@@ -682,6 +686,15 @@ tools:
 		}
 		if cfg.Tools.Grep.MaxFileSizeBytes != 524288 {
 			t.Errorf("Tools.Grep.MaxFileSizeBytes = %d, want 524288", cfg.Tools.Grep.MaxFileSizeBytes)
+		}
+		if cfg.Tools.Bash.MaxTimeoutSeconds != 300 {
+			t.Errorf("Tools.Bash.MaxTimeoutSeconds = %d, want 300", cfg.Tools.Bash.MaxTimeoutSeconds)
+		}
+		if cfg.Tools.Bash.HeadBytes != 16384 {
+			t.Errorf("Tools.Bash.HeadBytes = %d, want 16384", cfg.Tools.Bash.HeadBytes)
+		}
+		if cfg.Tools.Bash.TailBytes != 4096 {
+			t.Errorf("Tools.Bash.TailBytes = %d, want 4096", cfg.Tools.Bash.TailBytes)
 		}
 	})
 
