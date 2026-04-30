@@ -18,7 +18,16 @@ func FileTools(workDir string) []tool.Tool {
 		newReadFileTool(workDir),
 		newWriteFileTool(workDir),
 		newUpdateFileTool(workDir),
+		newMultiEditTool(workDir),
 	}
+}
+
+// MultiEditTools returns just the multi_edit tool bound to workDir.
+// Chat mode registers this without the rest of FileTools so the agent can
+// apply atomic batched edits during investigation without exposing the full
+// read/write surface.
+func MultiEditTools(workDir string) []tool.Tool {
+	return []tool.Tool{newMultiEditTool(workDir)}
 }
 
 // resolvePath resolves inputPath relative to workDir.
@@ -225,6 +234,73 @@ func newUpdateFileTool(workDir string) tool.Tool {
 			}
 
 			return updateFileOutput{Path: p}, nil
+		},
+	)
+}
+
+// --- multi_edit ---
+
+type multiEditSpec struct {
+	OldString  string `json:"old_string" description:"Exact string to find. Must be unique in the in-progress buffer unless replace_all is true."`
+	NewString  string `json:"new_string" description:"Replacement string. Must differ from old_string."`
+	ReplaceAll bool   `json:"replace_all,omitempty" description:"Replace every occurrence of old_string instead of requiring uniqueness."`
+}
+
+type multiEditInput struct {
+	Path  string          `json:"path" description:"File path to modify"`
+	Edits []multiEditSpec `json:"edits" description:"Ordered list of edits applied sequentially against the in-progress buffer; either every edit applies or nothing is written."`
+}
+
+type multiEditOutput struct {
+	Path         string `json:"path"`
+	EditsApplied int    `json:"edits_applied"`
+}
+
+func newMultiEditTool(workDir string) tool.Tool {
+	return tool.NewTool("multi_edit",
+		"Apply an ordered, atomic batch of string replacements to a single file. "+
+			"Each edit's old_string must be unique in the in-progress buffer unless that edit's replace_all is true. "+
+			"Edits run sequentially so a later edit can target text produced by an earlier edit. "+
+			"Either every edit applies and the file is written once, or nothing changes on disk. "+
+			"Prefer this over multiple update_file calls when editing the same file two or more times.",
+		func(ctx context.Context, in multiEditInput) (multiEditOutput, error) {
+			if len(in.Edits) == 0 {
+				return multiEditOutput{}, fmt.Errorf("edits list is empty")
+			}
+			for i, e := range in.Edits {
+				if e.OldString == e.NewString {
+					return multiEditOutput{}, fmt.Errorf("edit %d: old_string and new_string are identical", i)
+				}
+			}
+
+			p := resolvePath(workDir, in.Path)
+			data, err := os.ReadFile(p)
+			if err != nil {
+				return multiEditOutput{}, fmt.Errorf("reading %s: %w", p, err)
+			}
+
+			content := string(data)
+			for i, e := range in.Edits {
+				count := strings.Count(content, e.OldString)
+				if count == 0 {
+					return multiEditOutput{}, fmt.Errorf("edit %d: old_string not found in %s", i, p)
+				}
+				if !e.ReplaceAll && count > 1 {
+					return multiEditOutput{}, fmt.Errorf("edit %d: old_string appears %d times in %s — must be unique (set replace_all to override)", i, count, p)
+				}
+				if e.ReplaceAll {
+					content = strings.ReplaceAll(content, e.OldString, e.NewString)
+				} else {
+					content = strings.Replace(content, e.OldString, e.NewString, 1)
+				}
+			}
+
+			// #nosec G703 - path is resolved through resolvePath from user input
+			if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+				return multiEditOutput{}, fmt.Errorf("writing %s: %w", p, err)
+			}
+
+			return multiEditOutput{Path: p, EditsApplied: len(in.Edits)}, nil
 		},
 	)
 }

@@ -10,6 +10,7 @@ You have dedicated file tools. **Always prefer them over bash for file I/O:**
 - **`read_file`** — Read file content with line numbers. Always read a file before modifying it.
 - **`write_file`** — Write full file content. Use for new files or complete rewrites.
 - **`update_file`** — Replace an exact string in a file. Preferred for targeted edits — the old_string must be unique in the file. Always `read_file` first.
+- **`multi_edit`** — Apply an ordered, atomic batch of `{old_string, new_string, replace_all?}` edits to a single file in one call. Either every edit applies or nothing changes on disk. Edits run sequentially so a later edit can target text produced by an earlier one. Prefer this over multiple `update_file` calls when editing the same file two or more times.
 
 **Do NOT use bash for**: `cat`, `head`, `tail`, `ls`, `find`, `echo >`, or any file read/write operation.
 
@@ -33,7 +34,7 @@ Use `bash` only for running commands: build, test, git, install, compile, lint �
 
 1. Use `list_files` to understand the project structure before making changes.
 2. Use `read_file` to understand existing code before editing.
-3. Use `update_file` for targeted edits, or `write_file` for new files / complete rewrites.
+3. Use `update_file` for a single targeted edit, `multi_edit` for two-or-more edits to the same file, or `write_file` for new files / complete rewrites.
 4. Use `bash` to build, test, or run commands to verify your changes.
 
 ## Inform User

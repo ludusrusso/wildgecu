@@ -58,6 +58,7 @@ func Prepare(ctx context.Context, cfg Config) (*session.Config, *debug.Logger, e
 	registry.Add(tools.GeneralTools())
 	registry.Add(tools.ExecTools(cfg.Home.Dir()))
 	registry.Add(tools.SearchTools(cfg.Home.Dir(), cfg.Tools.Search))
+	registry.Add(tools.MultiEditTools(cfg.Home.Dir()))
 	registry.Add(tools.SkillTools(skillsDir))
 	registry.Add(tools.InformTools())
 	registry.Add(tools.TelegramTools(cfg.TelegramAuth))
