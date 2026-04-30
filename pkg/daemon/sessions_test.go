@@ -65,7 +65,7 @@ func TestReset(t *testing.T) {
 		oldID := old.ID
 
 		// Add a message so the old session is non-empty.
-		old.Messages = append(old.Messages, provider.Message{Role: "user", Content: "hi"})
+		old.messages = append(old.messages, provider.Message{Role: "user", Content: "hi"})
 
 		newSess, err := sm.Reset(context.Background(), oldID)
 		if err != nil {
@@ -110,7 +110,7 @@ func TestReset(t *testing.T) {
 		}
 		old := sm.Create()
 		// Simulate conversation history.
-		old.Messages = append(old.Messages,
+		old.messages = append(old.messages,
 			provider.Message{Role: "user", Content: "hello"},
 			provider.Message{Role: "assistant", Content: "hi there"},
 		)
@@ -120,11 +120,12 @@ func TestReset(t *testing.T) {
 			t.Fatalf("Reset() error: %v", err)
 		}
 		// New session should only have the initial messages, not the old conversation.
-		if len(newSess.Messages) != 1 {
-			t.Errorf("expected 1 initial message, got %d", len(newSess.Messages))
+		messages := newSess.Messages()
+		if len(messages) != 1 {
+			t.Errorf("expected 1 initial message, got %d", len(messages))
 		}
-		if newSess.Messages[0].Content != "You are helpful." {
-			t.Errorf("expected initial system message, got %q", newSess.Messages[0].Content)
+		if messages[0].Content != "You are helpful." {
+			t.Errorf("expected initial system message, got %q", messages[0].Content)
 		}
 	})
 

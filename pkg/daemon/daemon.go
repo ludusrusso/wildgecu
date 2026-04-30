@@ -103,9 +103,10 @@ func Run(ctx context.Context, cfg Config) error {
 		if sess == nil {
 			return command.StatusInfo{}, fmt.Errorf("session not found: %s", id)
 		}
+		messages := sess.Messages()
 		var toolCalls int
 		uniqueSkills := make(map[string]struct{})
-		for _, msg := range sess.Messages {
+		for _, msg := range messages {
 			toolCalls += len(msg.ToolCalls)
 			for _, tc := range msg.ToolCalls {
 				if tc.Name == "read_skill" {
@@ -118,7 +119,7 @@ func Run(ctx context.Context, cfg Config) error {
 		providerName, modelName, _ := strings.Cut(cfg.DefaultModel, "/")
 		return command.StatusInfo{
 			SessionID:    sess.ID,
-			MessageCount: len(sess.Messages),
+			MessageCount: len(messages),
 			ToolCalls:    toolCalls,
 			SkillsLoaded: len(uniqueSkills),
 			Provider:     providerName,
@@ -132,7 +133,7 @@ func Run(ctx context.Context, cfg Config) error {
 		if sess == nil {
 			return nil, fmt.Errorf("session not found: %s", id)
 		}
-		return sess.Todos, nil
+		return sess.Todos(), nil
 	})
 	cmdRegistry.Register(todosCmd)
 	srv.SetCommands(cmdRegistry)
