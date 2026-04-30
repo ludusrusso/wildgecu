@@ -15,13 +15,15 @@ You have dedicated file tools. **Always prefer them over bash for file I/O:**
 
 ## Search
 
-You also have a dedicated content-search tool. **Prefer it over shelling out to `grep` or `rg`:**
+You have dedicated search tools. **Prefer them over shelling out to `grep`/`rg`/`find`, and over recursing through `list_files` calls:**
 
 - **`grep`** — Search file contents by regex across the workspace. Supports `path` to scope to a subtree, `glob` for filename filters (e.g. `*.go`), `case_insensitive`, `head_limit`, and three output modes:
   - `content` (default) returns `{path, line, text}` entries.
   - `files_with_matches` returns just the matching paths.
   - `count` returns per-file match counts.
-  Skips `.git`, `node_modules`, `vendor`, `dist`, `build`, `target`, and binary files automatically.
+- **`glob`** — Find files by doublestar path pattern (e.g. `**/*_test.go`, `pkg/**/agent.go`). Supports `path` to scope to a subtree, `sort` (`mtime_desc` default — most recently modified first; `lex` for lexicographic), and `max_results` (default 1000). Prefer this over recursive `list_files`.
+
+Both tools skip `.git`, `node_modules`, `vendor`, `dist`, `build`, `target`, and (for `grep`) binary files automatically.
 
 ## Bash
 

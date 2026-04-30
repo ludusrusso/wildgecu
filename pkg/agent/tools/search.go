@@ -27,9 +27,12 @@ const (
 	grepModeCount            = "count"
 )
 
-// SearchTools returns search tools (grep) bound to workDir.
+// SearchTools returns search tools (grep, glob) bound to workDir.
 func SearchTools(workDir string, cfg SearchConfig) []tool.Tool {
-	return []tool.Tool{newGrepTool(workDir, cfg)}
+	return []tool.Tool{
+		newGrepTool(workDir, cfg),
+		newGlobTool(workDir),
+	}
 }
 
 type grepInput struct {
@@ -160,6 +163,49 @@ func buildFilesOutput(res search.Result, head int) grepOutput {
 		out.Indicator = fmt.Sprintf("showing first %d of %d files", out.Returned, totalFiles)
 	}
 	return out
+}
+
+type globInput struct {
+	Pattern    string `json:"pattern" description:"Doublestar path pattern matched against workspace-relative paths (e.g. **/*.go, pkg/**/agent.go)"`
+	Path       string `json:"path,omitempty" description:"Subdirectory under the workspace to scope the search (defaults to workspace root)"`
+	Sort       string `json:"sort,omitempty" description:"Result ordering: mtime_desc (default, most recently modified first) | lex"`
+	MaxResults int    `json:"max_results,omitempty" description:"Cap on returned paths. Default 1000."`
+}
+
+type globOutput struct {
+	Paths     []string `json:"paths"`
+	Total     int      `json:"total"`
+	Returned  int      `json:"returned"`
+	Truncated bool     `json:"truncated,omitempty"`
+	Indicator string   `json:"indicator,omitempty"`
+}
+
+func newGlobTool(workDir string) tool.Tool {
+	return tool.NewTool("glob",
+		"Find files by doublestar path pattern (e.g. **/*_test.go, pkg/**/agent.go). "+
+			"Prefer this over recursive list_files. Defaults to mtime-descending order; "+
+			"pass sort=lex for lexicographic. Skips .git, node_modules, vendor, dist, build, target.",
+		func(ctx context.Context, in globInput) (globOutput, error) {
+			res, err := search.Paths(ctx, workDir, in.Pattern, search.PathOptions{
+				Path:       in.Path,
+				Sort:       in.Sort,
+				MaxResults: in.MaxResults,
+			})
+			if err != nil {
+				return globOutput{}, err
+			}
+			out := globOutput{
+				Paths:    res.Paths,
+				Total:    res.Total,
+				Returned: len(res.Paths),
+			}
+			if res.Truncated {
+				out.Truncated = true
+				out.Indicator = fmt.Sprintf("showing first %d of %d paths", out.Returned, res.Total)
+			}
+			return out, nil
+		},
+	)
 }
 
 func buildCountOutput(res search.Result, head int) grepOutput {

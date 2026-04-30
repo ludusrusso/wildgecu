@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // grepFixture lays out a small workspace used by the grep tool tests.
@@ -38,11 +39,14 @@ func grepFixture(t *testing.T) string {
 
 func TestSearchTools(t *testing.T) {
 	tls := SearchTools("/tmp", SearchConfig{})
-	if len(tls) != 1 {
-		t.Fatalf("expected 1 search tool, got %d", len(tls))
+	want := []string{"grep", "glob"}
+	if len(tls) != len(want) {
+		t.Fatalf("expected %d search tools, got %d", len(want), len(tls))
 	}
-	if tls[0].Definition().Name != "grep" {
-		t.Fatalf("tool name = %q, want grep", tls[0].Definition().Name)
+	for i, name := range want {
+		if tls[i].Definition().Name != name {
+			t.Fatalf("tool[%d] name = %q, want %q", i, tls[i].Definition().Name, name)
+		}
 	}
 }
 
@@ -199,6 +203,137 @@ func TestGrepTool(t *testing.T) {
 		}
 		if len(out.Matches) != 1 {
 			t.Fatalf("matches len = %d, want 1", len(out.Matches))
+		}
+	})
+}
+
+// globFixture lays out a small workspace whose Go files have a known mtime
+// ladder so default mtime-desc ordering is testable.
+func globFixture(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	files := []string{
+		"a.go",
+		"pkg/agent.go",
+		"pkg/nested/deep.go",
+		"README.md",
+	}
+	for _, rel := range files {
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte("// "+rel+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Apply mtimes oldest-first so reverse order is the mtime-desc result.
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for i, rel := range files {
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		mt := base.Add(time.Duration(i) * time.Hour)
+		if err := os.Chtimes(full, mt, mt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
+}
+
+func TestGlobTool(t *testing.T) {
+	t.Run("schema lists pattern as required", func(t *testing.T) {
+		tl := newGlobTool("/tmp")
+		def := tl.Definition()
+		if def.Name != "glob" {
+			t.Fatalf("name = %q", def.Name)
+		}
+		params, _ := def.Parameters["properties"].(map[string]any)
+		if _, ok := params["pattern"]; !ok {
+			t.Fatal("schema missing pattern property")
+		}
+		req, _ := def.Parameters["required"].([]any)
+		found := false
+		for _, name := range req {
+			if name == "pattern" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatal("pattern should be required in schema")
+		}
+	})
+
+	t.Run("default sort is mtime descending", func(t *testing.T) {
+		root := globFixture(t)
+		tl := newGlobTool(root)
+		var out globOutput
+		execTool(t, tl, map[string]any{"pattern": "**/*.go"}, &out)
+
+		want := []string{"pkg/nested/deep.go", "pkg/agent.go", "a.go"}
+		if len(out.Paths) != len(want) {
+			t.Fatalf("paths len = %d, want %d (paths=%v)", len(out.Paths), len(want), out.Paths)
+		}
+		for i, p := range out.Paths {
+			if p != want[i] {
+				t.Errorf("paths[%d] = %q, want %q", i, p, want[i])
+			}
+		}
+	})
+
+	t.Run("lex sort", func(t *testing.T) {
+		root := globFixture(t)
+		tl := newGlobTool(root)
+		var out globOutput
+		execTool(t, tl, map[string]any{"pattern": "**/*.go", "sort": "lex"}, &out)
+
+		want := []string{"a.go", "pkg/agent.go", "pkg/nested/deep.go"}
+		for i, p := range out.Paths {
+			if p != want[i] {
+				t.Errorf("paths[%d] = %q, want %q", i, p, want[i])
+			}
+		}
+	})
+
+	t.Run("max results truncates with indicator", func(t *testing.T) {
+		root := globFixture(t)
+		tl := newGlobTool(root)
+		var out globOutput
+		execTool(t, tl, map[string]any{"pattern": "**/*.go", "sort": "lex", "max_results": 1}, &out)
+
+		if out.Total != 3 {
+			t.Fatalf("total = %d, want 3", out.Total)
+		}
+		if !out.Truncated {
+			t.Fatal("truncated should be true")
+		}
+		if out.Indicator == "" {
+			t.Fatal("indicator should be populated when truncated")
+		}
+		if len(out.Paths) != 1 {
+			t.Fatalf("paths len = %d, want 1", len(out.Paths))
+		}
+	})
+
+	t.Run("path scope outside root rejected", func(t *testing.T) {
+		root := globFixture(t)
+		tl := newGlobTool(root)
+		_, err := tl.Execute(context.Background(), map[string]any{
+			"pattern": "**/*.go",
+			"path":    "../etc",
+		})
+		if err == nil {
+			t.Fatal("expected error for path escaping root")
+		}
+	})
+
+	t.Run("invalid sort rejected", func(t *testing.T) {
+		root := globFixture(t)
+		tl := newGlobTool(root)
+		_, err := tl.Execute(context.Background(), map[string]any{
+			"pattern": "**/*.go",
+			"sort":    "weird",
+		})
+		if err == nil {
+			t.Fatal("expected error for invalid sort")
 		}
 	})
 }

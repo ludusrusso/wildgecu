@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // fixture builds a small workspace under t.TempDir().
@@ -236,6 +237,221 @@ func TestContent(t *testing.T) {
 		_, err := Content(context.Background(), root, Options{})
 		if err == nil {
 			t.Fatal("expected error for empty pattern")
+		}
+	})
+}
+
+// pathsFixture builds a workspace with files at known relative paths and
+// applies a deterministic mtime ladder so mtime-desc sort is testable.
+//
+//	root/
+//	├── README.md
+//	├── a.go
+//	├── pkg/agent.go
+//	├── pkg/nested/deep.go
+//	├── pkg/nested/agent_test.go
+//	├── .git/HEAD              (skipped)
+//	└── node_modules/x.js      (skipped)
+//
+// Files are touched in the order listed below so that touchOrder[0] has the
+// oldest mtime and touchOrder[len-1] is the newest.
+func pathsFixture(t *testing.T) (root string, touchOrder []string) {
+	t.Helper()
+	root = t.TempDir()
+
+	files := []string{
+		"README.md",
+		"a.go",
+		"pkg/agent.go",
+		"pkg/nested/deep.go",
+		"pkg/nested/agent_test.go",
+		".git/HEAD",
+		"node_modules/x.js",
+	}
+	for _, rel := range files {
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte("// "+rel+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	touchOrder = []string{
+		"a.go",
+		"pkg/agent.go",
+		"README.md",
+		"pkg/nested/deep.go",
+		"pkg/nested/agent_test.go",
+	}
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for i, rel := range touchOrder {
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		mt := base.Add(time.Duration(i) * time.Hour)
+		if err := os.Chtimes(full, mt, mt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root, touchOrder
+}
+
+func TestPaths(t *testing.T) {
+	t.Run("matches all go files via doublestar", func(t *testing.T) {
+		root, _ := pathsFixture(t)
+		got, err := Paths(context.Background(), root, "**/*.go", PathOptions{Sort: SortLex})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []string{
+			"a.go",
+			"pkg/agent.go",
+			"pkg/nested/agent_test.go",
+			"pkg/nested/deep.go",
+		}
+		if got.Total != len(want) {
+			t.Fatalf("total = %d, want %d (paths=%v)", got.Total, len(want), got.Paths)
+		}
+		for i, p := range got.Paths {
+			if p != want[i] {
+				t.Errorf("paths[%d] = %q, want %q", i, p, want[i])
+			}
+		}
+	})
+
+	t.Run("single-star scoped to package directory", func(t *testing.T) {
+		root, _ := pathsFixture(t)
+		got, err := Paths(context.Background(), root, "pkg/*.go", PathOptions{Sort: SortLex})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []string{"pkg/agent.go"}
+		if len(got.Paths) != len(want) {
+			t.Fatalf("paths len = %d, want %d (paths=%v)", len(got.Paths), len(want), got.Paths)
+		}
+		if got.Paths[0] != want[0] {
+			t.Errorf("paths[0] = %q, want %q", got.Paths[0], want[0])
+		}
+	})
+
+	t.Run("test-file pattern", func(t *testing.T) {
+		root, _ := pathsFixture(t)
+		got, err := Paths(context.Background(), root, "**/*_test.go", PathOptions{Sort: SortLex})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got.Paths) != 1 || got.Paths[0] != "pkg/nested/agent_test.go" {
+			t.Fatalf("paths = %v, want [pkg/nested/agent_test.go]", got.Paths)
+		}
+	})
+
+	t.Run("default sort is mtime descending", func(t *testing.T) {
+		root, touchOrder := pathsFixture(t)
+		got, err := Paths(context.Background(), root, "**/*.go", PathOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// touchOrder lists oldest-first; the .go subset reversed should equal
+		// the mtime-desc ordering.
+		var goOrder []string
+		for i := len(touchOrder) - 1; i >= 0; i-- {
+			if strings.HasSuffix(touchOrder[i], ".go") {
+				goOrder = append(goOrder, touchOrder[i])
+			}
+		}
+		if len(got.Paths) != len(goOrder) {
+			t.Fatalf("paths len = %d, want %d (paths=%v)", len(got.Paths), len(goOrder), got.Paths)
+		}
+		for i, p := range got.Paths {
+			if p != goOrder[i] {
+				t.Errorf("paths[%d] = %q, want %q (full=%v)", i, p, goOrder[i], got.Paths)
+			}
+		}
+	})
+
+	t.Run("max results truncates with total preserved", func(t *testing.T) {
+		root, _ := pathsFixture(t)
+		got, err := Paths(context.Background(), root, "**/*.go", PathOptions{Sort: SortLex, MaxResults: 2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Total != 4 {
+			t.Fatalf("total = %d, want 4", got.Total)
+		}
+		if len(got.Paths) != 2 {
+			t.Fatalf("paths len = %d, want 2", len(got.Paths))
+		}
+		if !got.Truncated {
+			t.Fatal("truncated should be true")
+		}
+	})
+
+	t.Run("default skip dirs are skipped", func(t *testing.T) {
+		root, _ := pathsFixture(t)
+		got, err := Paths(context.Background(), root, "**/*", PathOptions{Sort: SortLex})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range got.Paths {
+			if strings.HasPrefix(p, ".git/") || strings.HasPrefix(p, "node_modules/") {
+				t.Fatalf("skip dir leaked into results: %q", p)
+			}
+		}
+	})
+
+	t.Run("path scope under root", func(t *testing.T) {
+		root, _ := pathsFixture(t)
+		got, err := Paths(context.Background(), root, "**/*.go", PathOptions{Path: "pkg", Sort: SortLex})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range got.Paths {
+			if !strings.HasPrefix(p, "pkg/") {
+				t.Errorf("path %q escaped pkg/ scope", p)
+			}
+		}
+		if len(got.Paths) == 0 {
+			t.Fatal("expected matches under pkg/")
+		}
+	})
+
+	t.Run("path outside root rejected", func(t *testing.T) {
+		root, _ := pathsFixture(t)
+		_, err := Paths(context.Background(), root, "**/*.go", PathOptions{Path: "../etc"})
+		if err == nil {
+			t.Fatal("expected error for path escaping root")
+		}
+	})
+
+	t.Run("absolute path outside root rejected", func(t *testing.T) {
+		root, _ := pathsFixture(t)
+		_, err := Paths(context.Background(), root, "**/*.go", PathOptions{Path: "/tmp"})
+		if err == nil {
+			t.Fatal("expected error for absolute path outside root")
+		}
+	})
+
+	t.Run("invalid sort returns error", func(t *testing.T) {
+		root, _ := pathsFixture(t)
+		_, err := Paths(context.Background(), root, "**/*.go", PathOptions{Sort: "weird"})
+		if err == nil {
+			t.Fatal("expected error for invalid sort")
+		}
+	})
+
+	t.Run("empty pattern returns error", func(t *testing.T) {
+		root, _ := pathsFixture(t)
+		_, err := Paths(context.Background(), root, "", PathOptions{})
+		if err == nil {
+			t.Fatal("expected error for empty pattern")
+		}
+	})
+
+	t.Run("invalid pattern returns error", func(t *testing.T) {
+		root, _ := pathsFixture(t)
+		_, err := Paths(context.Background(), root, "[unclosed", PathOptions{})
+		if err == nil {
+			t.Fatal("expected error for invalid pattern")
 		}
 	})
 }

@@ -19,6 +19,9 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
+
+	"github.com/bmatcuk/doublestar/v4"
 )
 
 // DefaultSkipDirs is the standard list of directory base names that the search
@@ -32,6 +35,17 @@ const DefaultMaxFileSize int64 = 1 << 20
 // DefaultHeadLimit is the default cap on Match entries returned by Content
 // when Options.HeadLimit is zero.
 const DefaultHeadLimit = 200
+
+// DefaultPathsMaxResults is the default cap on paths returned by Paths when
+// PathOptions.MaxResults is zero.
+const DefaultPathsMaxResults = 1000
+
+// SortMtimeDesc sorts paths by modification time, most recent first
+// (Claude Code convention). Stable tiebreaker on path.
+const SortMtimeDesc = "mtime_desc"
+
+// SortLex sorts paths lexicographically, ascending.
+const SortLex = "lex"
 
 // binarySniffSize is the number of leading bytes inspected to classify a file
 // as text or binary.
@@ -254,4 +268,144 @@ func scanFile(path string, re *regexp.Regexp) ([]Match, error) {
 		}
 	}
 	return matches, nil
+}
+
+// PathOptions configures a Paths search.
+type PathOptions struct {
+	// Path optionally scopes the walk to a sub-path under root. Empty means
+	// walk root directly. Both relative (joined to root) and absolute paths
+	// are accepted, but the resolved path must remain under root.
+	Path string
+	// Sort selects the result ordering. Empty or SortMtimeDesc orders by
+	// modification time descending (most recently modified first); SortLex
+	// orders lexicographically ascending.
+	Sort string
+	// MaxResults caps the number of returned paths. Zero means use
+	// DefaultPathsMaxResults. A negative value disables capping entirely.
+	MaxResults int
+	// SkipDirs overrides the default skip-dir list. Nil means use DefaultSkipDirs.
+	SkipDirs []string
+}
+
+// PathsResult carries the matched paths plus truncation metadata.
+//
+// Total is the total number of paths found across the scan; len(Paths) is at
+// most MaxResults. Truncated is true when Total > len(Paths).
+type PathsResult struct {
+	Paths     []string
+	Total     int
+	Truncated bool
+}
+
+// Paths walks root and returns regular-file paths whose workspace-relative,
+// slash-separated path matches the given doublestar pattern (e.g. "**/*.go",
+// "pkg/**/agent.go"). Default skip-dirs and the workspace boundary check are
+// shared with Content.
+func Paths(ctx context.Context, root, pattern string, opts PathOptions) (PathsResult, error) {
+	if pattern == "" {
+		return PathsResult{}, errors.New("search: pattern is required")
+	}
+	if !doublestar.ValidatePattern(pattern) {
+		return PathsResult{}, fmt.Errorf("search: invalid pattern %q", pattern)
+	}
+
+	root = filepath.Clean(root)
+	walkRoot := root
+	if opts.Path != "" {
+		sub, err := resolveUnderRoot(root, opts.Path)
+		if err != nil {
+			return PathsResult{}, err
+		}
+		walkRoot = sub
+	}
+
+	sortMode := opts.Sort
+	if sortMode == "" {
+		sortMode = SortMtimeDesc
+	}
+	if sortMode != SortMtimeDesc && sortMode != SortLex {
+		return PathsResult{}, fmt.Errorf("search: invalid sort %q (want %q or %q)", sortMode, SortMtimeDesc, SortLex)
+	}
+
+	skipSet := buildSkipSet(opts.SkipDirs)
+
+	type entry struct {
+		path  string
+		mtime time.Time
+	}
+	var entries []entry
+	walkErr := filepath.WalkDir(walkRoot, func(path string, d fs.DirEntry, werr error) error {
+		if cerr := ctx.Err(); cerr != nil {
+			return cerr
+		}
+		if werr != nil {
+			if d != nil && d.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if d.IsDir() {
+			if path != walkRoot {
+				if _, skip := skipSet[d.Name()]; skip {
+					return fs.SkipDir
+				}
+			}
+			return nil
+		}
+		if !d.Type().IsRegular() {
+			return nil
+		}
+
+		rel, rerr := filepath.Rel(root, path)
+		if rerr != nil {
+			return nil
+		}
+		relSlash := filepath.ToSlash(rel)
+
+		ok, mErr := doublestar.Match(pattern, relSlash)
+		if mErr != nil || !ok {
+			return nil
+		}
+
+		info, ierr := d.Info()
+		if ierr != nil {
+			return nil
+		}
+		entries = append(entries, entry{path: relSlash, mtime: info.ModTime()})
+		return nil
+	})
+	if walkErr != nil {
+		return PathsResult{}, walkErr
+	}
+
+	switch sortMode {
+	case SortLex:
+		sort.Slice(entries, func(i, j int) bool {
+			return entries[i].path < entries[j].path
+		})
+	default:
+		sort.SliceStable(entries, func(i, j int) bool {
+			if !entries[i].mtime.Equal(entries[j].mtime) {
+				return entries[i].mtime.After(entries[j].mtime)
+			}
+			return entries[i].path < entries[j].path
+		})
+	}
+
+	total := len(entries)
+	limit := opts.MaxResults
+	if limit == 0 {
+		limit = DefaultPathsMaxResults
+	}
+	truncated := false
+	if limit > 0 && total > limit {
+		entries = entries[:limit]
+		truncated = true
+	}
+
+	paths := make([]string, len(entries))
+	for i, e := range entries {
+		paths[i] = e.path
+	}
+	return PathsResult{Paths: paths, Total: total, Truncated: truncated}, nil
 }
