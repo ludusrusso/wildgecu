@@ -6,12 +6,24 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/ludusrusso/wildgecu/pkg/agent/tools"
 	"github.com/ludusrusso/wildgecu/pkg/daemon"
 	"github.com/ludusrusso/wildgecu/x/config"
 	"github.com/ludusrusso/wildgecu/x/setup"
 
 	"github.com/spf13/cobra"
 )
+
+// buildToolsConfig translates the YAML tools section into the runtime
+// tools.Config consumed by the agent.
+func buildToolsConfig(in config.ToolsConfig) tools.Config {
+	return tools.Config{
+		Search: tools.SearchConfig{
+			MaxResults:       in.Grep.MaxResults,
+			MaxFileSizeBytes: in.Grep.MaxFileSizeBytes,
+		},
+	}
+}
 
 func init() {
 	cmd := startCmd()
@@ -85,5 +97,6 @@ func runDaemon() error {
 		Container:     newContainer(),
 		ProviderNames: providerNames,
 		ModelAliases:  appConfig.Models,
+		Tools:         buildToolsConfig(appConfig.Tools),
 	})
 }

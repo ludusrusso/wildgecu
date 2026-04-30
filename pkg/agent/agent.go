@@ -24,6 +24,7 @@ type Config struct {
 	ResolveProvider tools.ProviderResolver // nil when model override is not supported
 	MemoryModel     string                 // optional alias/ref for the memory agent; empty = use Provider
 	ModelsInfo      *tools.ModelInfo       // nil when model info is not available
+	Tools           tools.Config           // tool configuration; zero values pick sensible defaults
 	Debug           bool
 }
 
@@ -56,6 +57,7 @@ func Prepare(ctx context.Context, cfg Config) (*session.Config, *debug.Logger, e
 	registry := tool.NewRegistry()
 	registry.Add(tools.GeneralTools())
 	registry.Add(tools.ExecTools(cfg.Home.Dir()))
+	registry.Add(tools.SearchTools(cfg.Home.Dir(), cfg.Tools.Search))
 	registry.Add(tools.SkillTools(skillsDir))
 	registry.Add(tools.InformTools())
 	registry.Add(tools.TelegramTools(cfg.TelegramAuth))
@@ -141,6 +143,7 @@ func PrepareCode(ctx context.Context, cfg Config, workDir string) (*session.Conf
 	registry.Add(tools.GeneralTools())
 	registry.Add(tools.ExecTools(workDir))
 	registry.Add(tools.FileTools(workDir))
+	registry.Add(tools.SearchTools(workDir, cfg.Tools.Search))
 	registry.Add(tools.SkillTools(skillsDir))
 	registry.Add(tools.InformTools())
 	registry.Add(tools.TelegramTools(cfg.TelegramAuth))

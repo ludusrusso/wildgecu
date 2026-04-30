@@ -19,6 +19,18 @@ type ProviderConfig struct {
 	GoogleSearch bool   `yaml:"google_search"`
 }
 
+// GrepConfig configures the grep tool. Zero values fall through to the
+// defaults baked into pkg/search.
+type GrepConfig struct {
+	MaxResults       int   `yaml:"max_results"`
+	MaxFileSizeBytes int64 `yaml:"max_file_size_bytes"`
+}
+
+// ToolsConfig groups per-tool configuration loaded from the YAML "tools" block.
+type ToolsConfig struct {
+	Grep GrepConfig `yaml:"grep"`
+}
+
 // Config is the top-level application configuration.
 type Config struct {
 	Providers     map[string]ProviderConfig `yaml:"providers"`
@@ -26,6 +38,7 @@ type Config struct {
 	DefaultModel  string                    `yaml:"default_model"`
 	MemoryModel   string                    `yaml:"memory_model"`
 	TelegramToken string                    `yaml:"telegram_token"`
+	Tools         ToolsConfig               `yaml:"tools"`
 }
 
 // Load reads and validates a YAML config file from the given path.

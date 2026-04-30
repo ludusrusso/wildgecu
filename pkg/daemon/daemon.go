@@ -35,6 +35,7 @@ type Config struct {
 	Container     *container.Container
 	ProviderNames []string          // names of configured providers
 	ModelAliases  map[string]string // alias → "provider/model"
+	Tools         tools.Config      // tool-specific configuration; zero values pick sensible defaults
 }
 
 // Run is the main daemon loop. It manages the PID file, socket server, watchdog,
@@ -338,6 +339,7 @@ func initSessionManager(ctx context.Context, cfg Config, h *home.Home, tgAuth *a
 			Providers:    cfg.ProviderNames,
 			Models:       cfg.ModelAliases,
 		},
+		Tools: cfg.Tools,
 	}
 
 	return NewSessionManager(ctx, agentCfg, cfg.Container)

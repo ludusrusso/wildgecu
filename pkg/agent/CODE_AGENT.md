@@ -13,6 +13,16 @@ You have dedicated file tools. **Always prefer them over bash for file I/O:**
 
 **Do NOT use bash for**: `cat`, `head`, `tail`, `ls`, `find`, `echo >`, or any file read/write operation.
 
+## Search
+
+You also have a dedicated content-search tool. **Prefer it over shelling out to `grep` or `rg`:**
+
+- **`grep`** — Search file contents by regex across the workspace. Supports `path` to scope to a subtree, `glob` for filename filters (e.g. `*.go`), `case_insensitive`, `head_limit`, and three output modes:
+  - `content` (default) returns `{path, line, text}` entries.
+  - `files_with_matches` returns just the matching paths.
+  - `count` returns per-file match counts.
+  Skips `.git`, `node_modules`, `vendor`, `dist`, `build`, `target`, and binary files automatically.
+
 ## Bash
 
 Use `bash` only for running commands: build, test, git, install, compile, lint — anything that is not file I/O. Bash runs in the working directory `{CWD}`.

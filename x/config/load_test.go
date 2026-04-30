@@ -655,4 +655,56 @@ extra_top_level: ignored
 			t.Errorf("DefaultModel = %q, want %q", cfg.DefaultModel, "gemini/gemini-3-flash-preview")
 		}
 	})
+
+	t.Run("ParsesToolsBlock", func(t *testing.T) {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "wildgecu.yaml")
+		data := []byte(`providers:
+  gemini:
+    type: gemini
+    api_key: key
+default_model: gemini/gemini-3-flash-preview
+tools:
+  grep:
+    max_results: 50
+    max_file_size_bytes: 524288
+`)
+		if err := os.WriteFile(cfgPath, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfg, err := Load(cfgPath)
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+		if cfg.Tools.Grep.MaxResults != 50 {
+			t.Errorf("Tools.Grep.MaxResults = %d, want 50", cfg.Tools.Grep.MaxResults)
+		}
+		if cfg.Tools.Grep.MaxFileSizeBytes != 524288 {
+			t.Errorf("Tools.Grep.MaxFileSizeBytes = %d, want 524288", cfg.Tools.Grep.MaxFileSizeBytes)
+		}
+	})
+
+	t.Run("ToolsBlockOptional", func(t *testing.T) {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "wildgecu.yaml")
+		data := []byte(`providers:
+  gemini:
+    type: gemini
+    api_key: key
+default_model: gemini/gemini-3-flash-preview
+`)
+		if err := os.WriteFile(cfgPath, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfg, err := Load(cfgPath)
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+		// Zero values are fine; defaults are applied at the tool layer.
+		if cfg.Tools.Grep.MaxResults != 0 {
+			t.Errorf("Tools.Grep.MaxResults default = %d, want 0", cfg.Tools.Grep.MaxResults)
+		}
+	})
 }
